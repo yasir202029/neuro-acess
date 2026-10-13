@@ -1,0 +1,39 @@
+# Render deployment for NeuroAssess (replaces Vercel).
+#
+# Single origin: the Express API (artifacts/api-server) serves /api/* and the
+# built Vite SPA (artifacts/neuroassess-web/dist) as static files with an SPA
+# fallback. One service, no CORS surface between web and API.
+#
+# Required dashboard env vars (all secret, never committed):
+#   SUPABASE_URL, SUPABASE_ANON_KEY,
+#   NEXT_PUBLIC_SUPABASE_URL (= SUPABASE_URL), NEXT_PUBLIC_SUPABASE_ANON_KEY (= SUPABASE_ANON_KEY),
+# Optional (feature-dependent, server-only):
+#   DATABASE_URL (managed Postgres; real persistence instead of the in-memory
+#   SliceStore — see docs/delivery/RENDER_DEPLOY.md), ALLOWED_ORIGINS,
+#   NEUROCARE_FLAG_* overrides, NEUROCARE_KILL_SWITCH.
+services:
+  - type: web
+    name: neuroassess
+    runtime: node
+    plan: starter
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
+    startCommand: pnpm --filter @workspace/api-server start
+    healthCheckPath: /api/healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 24.21.0
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
