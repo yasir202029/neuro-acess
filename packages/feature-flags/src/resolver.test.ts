@@ -4,13 +4,13 @@ import { resolveFlag, resolveAllFlags } from "./index.js";
 describe("feature flags — resolution precedence", () => {
   it("kill switch forces OFF and overrides everything", () => {
     const r = resolveFlag({
-      flag: "patientMyCare",
+      flag: "patientWorkspace",
       environment: "development",
       overrides: {
-        env: { patientMyCare: true },
-        organisation: { patientMyCare: true },
-        user: { patientMyCare: true },
-        killSwitch: { patientMyCare: true },
+        env: { patientWorkspace: true },
+        organisation: { patientWorkspace: true },
+        user: { patientWorkspace: true },
+        killSwitch: { patientWorkspace: true },
       },
     });
     expect(r.enabled).toBe(false);
@@ -21,20 +21,30 @@ describe("feature flags — resolution precedence", () => {
     const r = resolveFlag({
       flag: "clinicianWorkstation",
       environment: "development",
-      overrides: { env: { clinicianWorkstation: true }, organisation: { clinicianWorkstation: true }, user: { clinicianWorkstation: false } },
+      overrides: {
+        env: { clinicianWorkstation: true },
+        organisation: { clinicianWorkstation: true },
+        user: { clinicianWorkstation: false },
+      },
     });
     expect(r.enabled).toBe(false);
     expect(r.source).toBe("USER");
   });
 
   it("production defaults to OFF for development-default flags", () => {
-    const r = resolveFlag({ flag: "patientMyCare", environment: "production" });
+    const r = resolveFlag({
+      flag: "patientWorkspace",
+      environment: "production",
+    });
     expect(r.enabled).toBe(false);
     expect(r.source).toBe("DEFAULT");
   });
 
   it("development honours the catalogue default", () => {
-    const r = resolveFlag({ flag: "patientMyCare", environment: "development" });
+    const r = resolveFlag({
+      flag: "patientWorkspace",
+      environment: "development",
+    });
     expect(r.enabled).toBe(true);
   });
 
