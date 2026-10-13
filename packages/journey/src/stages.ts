@@ -9,8 +9,8 @@
 export const careStages = [
   "LEAD", // referral received, not yet booked
   "BOOKED", // first appointment scheduled
-  "TRIAGE", // admin triage / assignment
-  "ASSESSMENT", // active assessment (intake, questionnaires, appointment)
+  "INTAKE", // patient completing intake forms / clinician preparing pathway
+  "ASSESSMENT", // active assessment (questionnaires, clinical interview)
   "DIAGNOSIS", // assessment outcome recorded
   "MORE_INFORMATION_REQUIRED", // blocked pending extra evidence
   "ECG_REQUESTED", // blocked pending physical-health / ECG

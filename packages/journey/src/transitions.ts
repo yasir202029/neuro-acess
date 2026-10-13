@@ -74,7 +74,7 @@ export const transitionTable: Readonly<Record<TransitionCommand, TransitionDefin
   TRIAGE_CASE: {
     command: "TRIAGE_CASE",
     from: ["BOOKED"],
-    to: "TRIAGE",
+    to: "INTAKE",
     capability: "user:manage",
     clinicalAuthorisation: false,
     blocking: [],
@@ -86,7 +86,7 @@ export const transitionTable: Readonly<Record<TransitionCommand, TransitionDefin
   },
   START_ASSESSMENT: {
     command: "START_ASSESSMENT",
-    from: ["TRIAGE"],
+    from: ["INTAKE"],
     to: "ASSESSMENT",
     capability: "clinical:write",
     clinicalAuthorisation: false,

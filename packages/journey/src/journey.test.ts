@@ -71,7 +71,7 @@ describe("journey — transition planning", () => {
   it("blocks START_ASSESSMENT until intake is completed", () => {
     const result = planTransition({
       request: { command: "START_ASSESSMENT", payload: { reason: "begin" } },
-      facts: facts({ currentStage: "TRIAGE", hasIntakeCompleted: false }),
+      facts: facts({ currentStage: "INTAKE", hasIntakeCompleted: false }),
       grants: clinician,
       expectedVersion: 3,
     });

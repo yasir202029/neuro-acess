@@ -53,7 +53,7 @@ const actor = { actorId: "clin-1", roles: ["CLINICIAN"] as const };
 describe("workflow-engine — atomic transition", () => {
   it("performs the full effect sequence for a valid transition", async () => {
     const { ports, effects, getStage, getVersion } = makePorts({
-      currentStage: "TRIAGE",
+      currentStage: "INTAKE",
       hasAssignedClinician: true,
       hasIntakeCompleted: true,
       openTaskTypes: [],
