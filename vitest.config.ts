@@ -26,6 +26,7 @@ export default defineConfig({
     include: [
       "packages/**/*.test.ts",
       "artifacts/neuroassess-web/src/**/*.test.{ts,tsx}",
+      "artifacts/api-server/src/**/*.test.ts",
     ],
     globals: false,
   },
