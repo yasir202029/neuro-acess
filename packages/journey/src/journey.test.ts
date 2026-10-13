@@ -29,10 +29,41 @@ describe("journey — transition planning", () => {
     });
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.plan.toStage).toBe("DIAGNOSIS");
+      expect(result.plan.toStage).toBe("DIAGNOSIS_REVIEW");
       expect(result.plan.stageChanged).toBe(true);
       expect(result.plan.definition.clinicalAuthorisation).toBe(true);
     }
+  });
+
+  it("advances DIAGNOSIS_REVIEW to DIAGNOSIS_CONFIRMED on CONFIRM_DIAGNOSIS", () => {
+    const result = planTransition({
+      request: { command: "CONFIRM_DIAGNOSIS", payload: { reason: "Meets DSM-5 criteria" } },
+      facts: facts({ currentStage: "DIAGNOSIS_REVIEW" }),
+      grants: clinician,
+      expectedVersion: 3,
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.plan.toStage).toBe("DIAGNOSIS_CONFIRMED");
+  });
+
+  it("moves ASSESSMENT -> MDT_REVIEW on escalation and back on resume", () => {
+    const escalated = planTransition({
+      request: { command: "ESCALATE_TO_MDT", payload: { reason: "Complex differential" } },
+      facts: facts({ currentStage: "ASSESSMENT" }),
+      grants: clinician,
+      expectedVersion: 3,
+    });
+    expect(escalated.ok).toBe(true);
+    if (escalated.ok) expect(escalated.plan.toStage).toBe("MDT_REVIEW");
+
+    const resumed = planTransition({
+      request: { command: "RESUME_FROM_MDT", payload: { reason: "MDT outcome recorded" } },
+      facts: facts({ currentStage: "MDT_REVIEW" }),
+      grants: clinician,
+      expectedVersion: 3,
+    });
+    expect(resumed.ok).toBe(true);
+    if (resumed.ok) expect(resumed.plan.toStage).toBe("DIAGNOSIS_REVIEW");
   });
 
   it("rejects a transition from the wrong source stage", () => {

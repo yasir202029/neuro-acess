@@ -8,15 +8,18 @@ export const transitionCommands = [
   "REQUEST_ASSESSMENT", // LEAD (entry): create the lead from a referral/self-referral
   "BOOK_APPOINTMENT", // LEAD -> BOOKED
   "TRIAGE_CASE", // BOOKED -> TRIAGE (assign clinician)
-  "START_ASSESSMENT", // TRIAGE -> ASSESSMENT
+  "START_INTAKE", // TRIAGE -> INTAKE
+  "START_ASSESSMENT", // INTAKE -> ASSESSMENT
   "REQUEST_MORE_INFORMATION", // ASSESSMENT -> MORE_INFORMATION_REQUIRED
   "PROVIDE_INFORMATION", // MORE_INFORMATION_REQUIRED -> ASSESSMENT
   "REQUEST_ECG", // ASSESSMENT -> ECG_REQUESTED
   "PROVIDE_PHYSICAL_HEALTH", // ECG_REQUESTED -> ASSESSMENT
-  "RECORD_ASSESSMENT_OUTCOME", // ASSESSMENT -> DIAGNOSIS (clinical authorisation)
-  "RECORD_DIAGNOSIS_NOT_CONFIRMED", // ASSESSMENT -> DIAGNOSIS_NOT_CONFIRMED
-  "ESCALATE_TO_MDT", // any clinical stage -> (task/queue only, stage unchanged)
-  "START_TITRATION", // DIAGNOSIS -> TITRATION (clinical)
+  "RECORD_ASSESSMENT_OUTCOME", // ASSESSMENT -> DIAGNOSIS_REVIEW (clinical authorisation)
+  "CONFIRM_DIAGNOSIS", // DIAGNOSIS_REVIEW -> DIAGNOSIS_CONFIRMED (clinical authorisation)
+  "RECORD_DIAGNOSIS_NOT_CONFIRMED", // DIAGNOSIS_REVIEW -> DIAGNOSIS_NOT_CONFIRMED (clinical)
+  "ESCALATE_TO_MDT", // clinical stage -> MDT_REVIEW
+  "RESUME_FROM_MDT", // MDT_REVIEW -> DIAGNOSIS_REVIEW
+  "START_TITRATION", // DIAGNOSIS_CONFIRMED -> TITRATION (clinical)
   "RECORD_TITRATION_REVIEW", // TITRATION -> TITRATION (loop) or -> PRESCRIBING
   "START_PRESCRIBING", // TITRATION -> PRESCRIBING (clinical)
   "READY_FOR_MAINTENANCE", // PRESCRIBING -> MAINTENANCE (clinical)
@@ -65,14 +68,17 @@ export type TransitionRequest =
   | { readonly command: "REQUEST_ASSESSMENT"; readonly payload: RequestAssessmentPayload }
   | { readonly command: "BOOK_APPOINTMENT"; readonly payload: BookAppointmentPayload }
   | { readonly command: "TRIAGE_CASE"; readonly payload: TriageCasePayload }
+  | { readonly command: "START_INTAKE"; readonly payload: GenericReasonPayload }
   | { readonly command: "START_ASSESSMENT"; readonly payload: GenericReasonPayload }
   | { readonly command: "REQUEST_MORE_INFORMATION"; readonly payload: GenericReasonPayload }
   | { readonly command: "PROVIDE_INFORMATION"; readonly payload: GenericReasonPayload }
   | { readonly command: "REQUEST_ECG"; readonly payload: GenericReasonPayload }
   | { readonly command: "PROVIDE_PHYSICAL_HEALTH"; readonly payload: GenericReasonPayload }
   | { readonly command: "RECORD_ASSESSMENT_OUTCOME"; readonly payload: RecordAssessmentOutcomePayload }
+  | { readonly command: "CONFIRM_DIAGNOSIS"; readonly payload: GenericReasonPayload }
   | { readonly command: "RECORD_DIAGNOSIS_NOT_CONFIRMED"; readonly payload: GenericReasonPayload }
   | { readonly command: "ESCALATE_TO_MDT"; readonly payload: GenericReasonPayload }
+  | { readonly command: "RESUME_FROM_MDT"; readonly payload: GenericReasonPayload }
   | { readonly command: "START_TITRATION"; readonly payload: GenericReasonPayload }
   | { readonly command: "RECORD_TITRATION_REVIEW"; readonly payload: RecordTitrationReviewPayload }
   | { readonly command: "START_PRESCRIBING"; readonly payload: GenericReasonPayload }

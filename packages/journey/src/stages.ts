@@ -9,11 +9,15 @@
 export const careStages = [
   "LEAD", // referral received, not yet booked
   "BOOKED", // first appointment scheduled
+  "TRIAGE", // admin triage / assignment
   "INTAKE", // patient completing intake forms / clinician preparing pathway
   "ASSESSMENT", // active assessment (questionnaires, clinical interview)
-  "DIAGNOSIS", // assessment outcome recorded
   "MORE_INFORMATION_REQUIRED", // blocked pending extra evidence
   "ECG_REQUESTED", // blocked pending physical-health / ECG
+  "DIAGNOSIS_REVIEW", // clinician reviewing assessment before recording outcome
+  "DIAGNOSIS_CONFIRMED", // diagnosis confirmed
+  "DIAGNOSIS_NOT_CONFIRMED", // assessment did not confirm a diagnosis
+  "MDT_REVIEW", // escalated to multi-disciplinary team discussion
   "TITRATION", // medication titration under way
   "PRESCRIBING", // stable prescribing loop
   "MAINTENANCE", // stable treatment, periodic monitoring
@@ -21,7 +25,6 @@ export const careStages = [
   "ANNUAL_REVIEW", // annual review in progress
   "OUTCOME", // episode closed with an outcome
   "DISCHARGE", // patient discharged
-  "DIAGNOSIS_NOT_CONFIRMED", // assessment did not confirm a diagnosis
 ] as const;
 
 export type CareStage = (typeof careStages)[number];

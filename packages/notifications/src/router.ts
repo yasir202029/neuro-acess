@@ -37,6 +37,7 @@ export const notificationTemplates = [
   "annual_review_started",
   "annual_review_complete",
   "mdt_escalation",
+  "mdt_outcome_recorded",
   "episode_closed",
   "discharged",
   "prescription_status_changed",
