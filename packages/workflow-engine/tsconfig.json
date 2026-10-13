@@ -1,0 +1,29 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "types": [],
+    "paths": {
+      "@neurocare/journey": [
+        "../journey/src/index.ts"
+      ],
+      "@neurocare/permissions": [
+        "../permissions/src/index.ts"
+      ],
+      "@neurocare/audit": [
+        "../audit/src/index.ts"
+      ],
+      "@neurocare/timeline": [
+        "../timeline/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "src/**/*.test.ts"
+  ]
+}

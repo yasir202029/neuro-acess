@@ -62,3 +62,6 @@ Thumbs.db
 .next/
 
 .next/
+
+# Foreign nested repository (retired per ADR 0001)
+neuro-acess/
