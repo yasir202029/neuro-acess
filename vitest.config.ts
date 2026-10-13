@@ -1,7 +1,8 @@
 import { defineConfig } from "vitest/config";
 import path from "node:path";
 
-const pkg = (name: string) => path.resolve(__dirname, "packages", name, "src", "index.ts");
+const pkg = (name: string) =>
+  path.resolve(__dirname, "packages", name, "src", "index.ts");
 
 /**
  * Root test runner for the NeuroCare OS spine packages.
@@ -22,7 +23,10 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["packages/**/*.test.ts"],
+    include: [
+      "packages/**/*.test.ts",
+      "artifacts/neuroassess-web/src/**/*.test.{ts,tsx}",
+    ],
     globals: false,
   },
 });
