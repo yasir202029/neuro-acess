@@ -68,6 +68,9 @@ import { ReportBuilder } from '@/components/report-builder';
 import { FinanceDashboard } from '@/components/finance-dashboard';
 import { RolePortal } from '@/components/role-portal';
 import { TeamManagement } from '@/components/team-management';
+import { SessionProvider, RequireWorkspace, type WorkspaceId } from '@/platform';
+import { SignInPage } from '@/components/sign-in';
+import type { FeatureFlag } from '@neurocare/feature-flags';
 
 const queryClient = new QueryClient();
 
@@ -396,6 +399,21 @@ function SettingsPage() { const [saved, setSaved] = useState(false); return <div
 
 function LoginPage({ role }: { role: 'patient' | 'clinician' }) { const [submitted, setSubmitted] = useState(false); const title = role === 'patient' ? 'Welcome back, Maya.' : 'Welcome back, Farah.'; return <div className="grain flex min-h-[100dvh] bg-[hsl(var(--secondary)/.42)]"><div className="hidden w-[42%] flex-col justify-between bg-[hsl(var(--primary))] p-10 text-[hsl(var(--sidebar-foreground))] lg:flex"><Logo light /><div><span className="mono text-[10px] uppercase tracking-[.18em] text-[hsl(var(--accent))]">NeuroAssess {role === 'patient' ? 'patient portal' : 'clinical workspace'}</span><h1 className="mt-6 max-w-md text-6xl leading-[.98] tracking-[-.055em]">A quieter place to keep care moving.</h1><p className="mt-6 max-w-sm leading-7 text-[hsl(var(--sidebar-foreground)/.65)]">{role === 'patient' ? 'Your appointments, questionnaires, messages and reports — together, securely.' : 'The focused workspace for thoughtful assessment and coordinated care.'}</p></div><p className="text-xs text-[hsl(var(--sidebar-foreground)/.45)]">Private healthcare, delivered with care.</p></div><div className="flex flex-1 items-center justify-center p-5 sm:p-10"><div className="w-full max-w-md"><div className="mb-12 lg:hidden"><Logo /></div>{submitted ? <div className="rounded-[26px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-8 text-center"><div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-[hsl(var(--secondary))] text-[hsl(var(--primary))]"><Mail size={20} /></div><h1 className="mt-5 text-2xl">Check your inbox.</h1><p className="mt-2 text-sm leading-6 text-[hsl(var(--muted-foreground))]">We have sent a secure sign-in link to your email address.</p><button onClick={() => setSubmitted(false)} className="mt-6 text-sm font-semibold text-[hsl(var(--primary))]" data-testid="button-login-again">Use a different email</button></div> : <><p className="mono text-[10px] uppercase tracking-[.18em] text-[hsl(var(--primary))]">{role === 'patient' ? 'Patient sign in' : 'Clinician sign in'}</p><h1 className="mt-4 text-4xl tracking-[-.04em]">{title}</h1><p className="mt-3 text-sm leading-6 text-[hsl(var(--muted-foreground))]">Sign in securely without a password. We will email you a one-time link.</p><form onSubmit={(e) => { e.preventDefault(); setSubmitted(true); }} className="mt-8 grid gap-4"><Field label="Email address" type="email" placeholder={role === 'patient' ? 'maya@example.com' : 'farah@neuroassess.co.uk'} testId={`${role}-login-email`} /><Button type="submit" className="mt-2 w-full" testId={`${role}-login-submit`}>Email me a sign-in link <ArrowRight size={16} /></Button></form><div className="mt-8 flex items-center justify-center gap-2 text-xs text-[hsl(var(--muted-foreground))]"><LockKeyhole size={14} /> Secure, passwordless access</div><Link href="/" className="mt-10 flex items-center justify-center gap-2 text-sm font-semibold text-[hsl(var(--primary))]" data-testid={`${role}-login-back`}> <ChevronLeft size={15} /> Back to NeuroAssess UK</Link></>}</div></div></div>; }
 
+const workspaceFlag: Record<WorkspaceId, FeatureFlag> = {
+  patient: "patientWorkspace",
+  clinician: "clinicianWorkstation",
+  admin: "adminControlCentre",
+  finance: "financeWorkspace",
+};
+
+function GuardedPortal({ workspace, role }: { workspace: WorkspaceId; role: Role }) {
+  return (
+    <RequireWorkspace workspace={workspace} flag={workspaceFlag[workspace]}>
+      <PortalLayout role={role} />
+    </RequireWorkspace>
+  );
+}
+
 function AppRouter() {
   return <Switch>
     <Route path="/" component={Home} />
@@ -407,48 +425,49 @@ function AppRouter() {
     <Route path="/faqs" component={FAQs} />
     <Route path="/contact" component={Contact} />
     <Route path="/book" component={Book} />
+    <Route path="/signin" component={SignInPage} />
      <Route path="/patient/login"><SupabaseLoginPage role="patient" /></Route>
      <Route path="/clinician/login"><SupabaseLoginPage role="clinician" /></Route>
-    <Route path="/patient"><PortalLayout role="patient" /></Route>
-    <Route path="/patient/appointments"><PortalLayout role="patient" /></Route>
-    <Route path="/patient/assessment"><PortalLayout role="patient" /></Route>
-    <Route path="/patient/messages"><PortalLayout role="patient" /></Route>
-    <Route path="/patient/reports"><PortalLayout role="patient" /></Route>
-    <Route path="/patient/documents"><PortalLayout role="patient" /></Route>
-    <Route path="/patient/prescriptions"><PortalLayout role="patient" /></Route>
-    <Route path="/patient/invoices"><PortalLayout role="patient" /></Route>
-    <Route path="/patient/physical-health"><PortalLayout role="patient" /></Route>
-    <Route path="/patient/feedback"><PortalLayout role="patient" /></Route>
-    <Route path="/patient/session/:id"><PortalLayout role="patient" /></Route>
-    <Route path="/patient/payments"><PortalLayout role="patient" /></Route>
-    <Route path="/patient/profile"><PortalLayout role="patient" /></Route>
-    <Route path="/clinician"><PortalLayout role="clinician" /></Route>
-    <Route path="/clinician/patients"><PortalLayout role="clinician" /></Route>
-    <Route path="/clinician/calendar"><PortalLayout role="clinician" /></Route>
-    <Route path="/clinician/assessments"><PortalLayout role="clinician" /></Route>
-    <Route path="/clinician/reports"><PortalLayout role="clinician" /></Route>
-    <Route path="/clinician/messages"><PortalLayout role="clinician" /></Route>
-    <Route path="/clinician/tasks"><PortalLayout role="clinician" /></Route>
-    <Route path="/clinician/earnings"><PortalLayout role="clinician" /></Route>
-    <Route path="/clinician/session/:id"><PortalLayout role="clinician" /></Route>
-    <Route path="/admin"><PortalLayout role="admin" /></Route>
-    <Route path="/admin/users"><PortalLayout role="admin" /></Route>
-    <Route path="/admin/appointments"><PortalLayout role="admin" /></Route>
-    <Route path="/admin/payments"><PortalLayout role="admin" /></Route>
-    <Route path="/admin/reports"><PortalLayout role="admin" /></Route>
-    <Route path="/admin/audit"><PortalLayout role="admin" /></Route>
-    <Route path="/admin/settings"><PortalLayout role="admin" /></Route>
-    <Route path="/admin/finance"><PortalLayout role="admin" /></Route>
-    <Route path="/admin/teams"><PortalLayout role="admin" /></Route>
-    <Route path="/finance"><PortalLayout role="finance" /></Route>
-    <Route path="/prescriber"><PortalLayout role="prescriber" /></Route>
-    <Route path="/nurse"><PortalLayout role="nurse" /></Route>
+    <Route path="/patient"><GuardedPortal workspace="patient" role="patient" /></Route>
+    <Route path="/patient/appointments"><GuardedPortal workspace="patient" role="patient" /></Route>
+    <Route path="/patient/assessment"><GuardedPortal workspace="patient" role="patient" /></Route>
+    <Route path="/patient/messages"><GuardedPortal workspace="patient" role="patient" /></Route>
+    <Route path="/patient/reports"><GuardedPortal workspace="patient" role="patient" /></Route>
+    <Route path="/patient/documents"><GuardedPortal workspace="patient" role="patient" /></Route>
+    <Route path="/patient/prescriptions"><GuardedPortal workspace="patient" role="patient" /></Route>
+    <Route path="/patient/invoices"><GuardedPortal workspace="patient" role="patient" /></Route>
+    <Route path="/patient/physical-health"><GuardedPortal workspace="patient" role="patient" /></Route>
+    <Route path="/patient/feedback"><GuardedPortal workspace="patient" role="patient" /></Route>
+    <Route path="/patient/session/:id"><GuardedPortal workspace="patient" role="patient" /></Route>
+    <Route path="/patient/payments"><GuardedPortal workspace="patient" role="patient" /></Route>
+    <Route path="/patient/profile"><GuardedPortal workspace="patient" role="patient" /></Route>
+    <Route path="/clinician"><GuardedPortal workspace="clinician" role="clinician" /></Route>
+    <Route path="/clinician/patients"><GuardedPortal workspace="clinician" role="clinician" /></Route>
+    <Route path="/clinician/calendar"><GuardedPortal workspace="clinician" role="clinician" /></Route>
+    <Route path="/clinician/assessments"><GuardedPortal workspace="clinician" role="clinician" /></Route>
+    <Route path="/clinician/reports"><GuardedPortal workspace="clinician" role="clinician" /></Route>
+    <Route path="/clinician/messages"><GuardedPortal workspace="clinician" role="clinician" /></Route>
+    <Route path="/clinician/tasks"><GuardedPortal workspace="clinician" role="clinician" /></Route>
+    <Route path="/clinician/earnings"><GuardedPortal workspace="clinician" role="clinician" /></Route>
+    <Route path="/clinician/session/:id"><GuardedPortal workspace="clinician" role="clinician" /></Route>
+    <Route path="/admin"><GuardedPortal workspace="admin" role="admin" /></Route>
+    <Route path="/admin/users"><GuardedPortal workspace="admin" role="admin" /></Route>
+    <Route path="/admin/appointments"><GuardedPortal workspace="admin" role="admin" /></Route>
+    <Route path="/admin/payments"><GuardedPortal workspace="admin" role="admin" /></Route>
+    <Route path="/admin/reports"><GuardedPortal workspace="admin" role="admin" /></Route>
+    <Route path="/admin/audit"><GuardedPortal workspace="admin" role="admin" /></Route>
+    <Route path="/admin/settings"><GuardedPortal workspace="admin" role="admin" /></Route>
+    <Route path="/admin/finance"><GuardedPortal workspace="admin" role="admin" /></Route>
+    <Route path="/admin/teams"><GuardedPortal workspace="admin" role="admin" /></Route>
+    <Route path="/finance"><GuardedPortal workspace="finance" role="finance" /></Route>
+    <Route path="/prescriber"><GuardedPortal workspace="clinician" role="prescriber" /></Route>
+    <Route path="/nurse"><GuardedPortal workspace="clinician" role="nurse" /></Route>
     <Route component={NotFound} />
   </Switch>;
 }
 
 function App() {
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><ErrorBoundary><AppRouter /></ErrorBoundary></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><ErrorBoundary><SessionProvider><AppRouter /></SessionProvider></ErrorBoundary></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
 }
 
 export default App;

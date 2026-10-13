@@ -11,7 +11,13 @@
     "moduleResolution": "bundler",
     "types": ["node", "vite/client"],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@neurocare/permissions": ["../../packages/permissions/src/index.ts"],
+      "@neurocare/journey": ["../../packages/journey/src/index.ts"],
+      "@neurocare/feature-flags": ["../../packages/feature-flags/src/index.ts"],
+      "@neurocare/audit": ["../../packages/audit/src/index.ts"],
+      "@neurocare/notifications": ["../../packages/notifications/src/index.ts"],
+      "@neurocare/timeline": ["../../packages/timeline/src/index.ts"]
     }
   },
   "references": [
