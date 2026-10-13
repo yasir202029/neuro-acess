@@ -194,6 +194,112 @@ export const auditLogsTable = pgTable("audit_logs", {
   createdAt,
 });
 
+// --- Slice 1: referral → assessment (see docs/delivery/SLICE1_DESIGN.md) ---
+
+export const referralsTable = pgTable("referrals", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull(),
+  pathway: text("pathway").notNull(), // ADHD | AUTISM | BOTH
+  referralSource: text("referral_source").notNull(), // SELF | GP | OTHER
+  presentingConcern: text("presenting_concern").notNull(),
+  validationStatus: text("validation_status").notNull().default("PENDING_VALIDATION"),
+  validationNote: text("validation_note"),
+  assignedClinicianProfileId: text("assigned_clinician_profile_id"),
+  appointmentId: text("appointment_id"),
+  createdAt,
+  updatedAt,
+});
+
+export const journeyStatesTable = pgTable(
+  "journey_states",
+  {
+    clinicId: text("clinic_id"),
+    id: id("id"),
+    patientId: text("patient_id").notNull(),
+    stage: text("stage").notNull(),
+    version: integer("version").notNull().default(0),
+    hasIntakeCompleted: boolean("has_intake_completed").notNull().default(false),
+    createdAt,
+    updatedAt,
+  },
+  (table) => [uniqueIndex("journey_states_patient_idx").on(table.patientId)],
+);
+
+/** Immutable append-only transition log (never UPDATEd, never DELETEd). */
+export const journeyTransitionsTable = pgTable("journey_transitions", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull(),
+  fromStage: text("from_stage"),
+  toStage: text("to_stage").notNull(),
+  command: text("command").notNull(),
+  actorProfileId: text("actor_profile_id").notNull(),
+  reason: text("reason"),
+  createdAt,
+});
+
+export const timelineEventsTable = pgTable("timeline_events", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull(),
+  eventType: text("event_type").notNull(),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull(),
+  actorProfileId: text("actor_profile_id"),
+  title: text("title").notNull(),
+  summary: text("summary"),
+  visibility: text("visibility").notNull(), // PATIENT | ASSIGNED_TEAM | CLINICAL_ORG | ADMIN | FINANCE | RESTRICTED
+  relatedType: text("related_type"),
+  relatedId: text("related_id"),
+  source: text("source").notNull(),
+  createdAt,
+});
+
+export const consultationConsentsTable = pgTable("consultation_consents", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull(),
+  referralId: text("referral_id").notNull(),
+  wordingVersion: text("wording_version").notNull(),
+  purpose: text("purpose").notNull(),
+  consentingParty: text("consenting_party").notNull(), // PATIENT | PROXY
+  clinicianProfileId: text("clinician_profile_id").notNull(),
+  restrictions: text("restrictions"),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  withdrawnAt: timestamp("withdrawn_at", { withTimezone: true }),
+  createdAt,
+});
+
+export const transcriptSegmentsTable = pgTable("transcript_segments", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull(),
+  referralId: text("referral_id").notNull(),
+  speaker: text("speaker").notNull(), // CLINICIAN | PATIENT
+  startMs: integer("start_ms").notNull(),
+  endMs: integer("end_ms").notNull(),
+  segmentText: text("segment_text").notNull(),
+  excluded: boolean("excluded").notNull().default(false),
+  createdAt,
+});
+
+export const aiDraftsTable = pgTable("ai_drafts", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull(),
+  referralId: text("referral_id").notNull(),
+  status: text("status").notNull(), // AI_DRAFT_REQUIRES_CLINICIAN_REVIEW | AMENDED | APPROVED | REJECTED
+  statements: jsonb("statements").notNull(),
+  missingInformation: jsonb("missing_information").notNull().default([]),
+  conflicts: jsonb("conflicts").notNull().default([]),
+  safetyFindings: jsonb("safety_findings").notNull().default([]),
+  version: integer("version").notNull().default(1),
+  createdByProfileId: text("created_by_profile_id").notNull(),
+  createdAt,
+  updatedAt,
+});
+
 export const insertClinicSchema = createInsertSchema(clinicsTable).omit({ createdAt: true, updatedAt: true });
 export const insertClinicMembershipSchema = createInsertSchema(clinicMembershipsTable).omit({ createdAt: true, updatedAt: true });
 export const insertProfileSchema = createInsertSchema(profilesTable).omit({ createdAt: true, updatedAt: true });
@@ -209,6 +315,13 @@ export const insertMessageSchema = createInsertSchema(messagesTable).omit({ crea
 export const insertDocumentSchema = createInsertSchema(documentsTable).omit({ createdAt: true });
 export const insertPaymentSchema = createInsertSchema(paymentsTable).omit({ createdAt: true });
 export const insertAuditLogSchema = createInsertSchema(auditLogsTable).omit({ createdAt: true });
+export const insertReferralSchema = createInsertSchema(referralsTable).omit({ createdAt: true, updatedAt: true });
+export const insertJourneyStateSchema = createInsertSchema(journeyStatesTable).omit({ createdAt: true, updatedAt: true });
+export const insertJourneyTransitionSchema = createInsertSchema(journeyTransitionsTable).omit({ createdAt: true });
+export const insertTimelineEventSchema = createInsertSchema(timelineEventsTable).omit({ createdAt: true });
+export const insertConsultationConsentSchema = createInsertSchema(consultationConsentsTable).omit({ createdAt: true });
+export const insertTranscriptSegmentSchema = createInsertSchema(transcriptSegmentsTable).omit({ createdAt: true });
+export const insertAiDraftSchema = createInsertSchema(aiDraftsTable).omit({ createdAt: true, updatedAt: true });
 
 export type InsertClinic = z.infer<typeof insertClinicSchema>;
 export type InsertClinicMembership = z.infer<typeof insertClinicMembershipSchema>;
@@ -225,3 +338,13 @@ export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type InsertDocument = z.infer<typeof insertDocumentSchema>;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type InsertReferral = z.infer<typeof insertReferralSchema>;
+export type InsertJourneyState = z.infer<typeof insertJourneyStateSchema>;
+export type InsertJourneyTransition = z.infer<typeof insertJourneyTransitionSchema>;
+export type InsertTimelineEvent = z.infer<typeof insertTimelineEventSchema>;
+export type InsertConsultationConsent = z.infer<typeof insertConsultationConsentSchema>;
+export type InsertTranscriptSegment = z.infer<typeof insertTranscriptSegmentSchema>;
+export type InsertAiDraft = z.infer<typeof insertAiDraftSchema>;
+export type Referral = typeof referralsTable.$inferSelect;
+export type JourneyState = typeof journeyStatesTable.$inferSelect;
+export type AiDraft = typeof aiDraftsTable.$inferSelect;
