@@ -9,7 +9,7 @@
 
 | Face / Workstation | Canonical path | Framework | Role boundary | Deploy target |
 |---|---|---|---|---|
-| Public website (face) | `artifacts/neuroassess-web/` (public routes + marketing shell) | Vite 7 + React 19 + Tailwind v4 | Public / unauthenticated | Render SPA + Vercel marketing |
+| Public website (face) | `artifacts/neuroassess-web/` (public routes + marketing shell) | Vite 7 + React 19 + Tailwind v4 | Public / unauthenticated | Render SPA |
 | Patient portal (web + app) | `artifacts/neuroassess-web/` (patient workspace) + `apps/mobile` (Expo, behind flag) | Vite web / Expo mobile | PATIENT | Render SPA (web) ; EAS / app stores (mobile) |
 | Clinician workstation | `artifacts/neuroassess-web/` (clinician workspace) | Vite 7 + React 19 | CLINICIAN | Render SPA |
 | Admin console | `artifacts/neuroassess-web/` (admin/finance/prescriber/nurse workspaces) + `apps/admin-portal` + `apps/super-admin-portal` (legacy, behind flag) | Vite 7 + React 19 | ADMIN / FINANCE / PRESCRIBER / NURSE / SUPER_ADMIN | Render SPA |
@@ -26,7 +26,7 @@
 | `main` | Production release | Production | PR merge / tag | Yes (Render prod) |
 | `staging` | Pre-production UAT | Staging | PR merge / manual | Yes (Render staging) |
 | `develop` | Integration baseline | Development | PR merge | Yes (Render dev) |
-| `feat/*` | Feature work | Feature preview (Vercel) | Push | Preview only |
+| `feat/*` | Feature work | Feature preview (Render) | Push | Preview only |
 | `hotfix/*` | Production emergency | Production | PR merge | Yes (Render prod) |
 | `release/*` | Release candidate | Staging | Push | Yes (Render staging) |
 
@@ -59,7 +59,7 @@ Render is the canonical single-service host (API + SPA from one origin, no CORS 
 4. Health check `GET /api/healthz` must return 200 before traffic shift.
 5. Rollback: Render auto-saves previous deploy; `docs/delivery/ROLLBACK_PLAN.md` governs manual rollback.
 
-**Vercel (approved foundation for portals)**: `apps/*` Next.js portals deploy as independent Vercel projects per `docs/multi-portal-architecture.md` (marketing-site, patient-portal, clinician-portal, admin-portal, super-admin-portal). Environments: `main`=Production, `develop`=Staging, feature branches=Preview. UAT = Vercel custom environment. Domain assignment only after Vercel verification.
+**Render (single deployment target)**: All NeuroAssess applications — the canonical SPA at `artifacts/neuroassess-web/` and the API at `artifacts/api-server/` — deploy as Render web services. Each environment (development, staging, production) runs its own Render service. Feature branches render preview deployments via the same Render single-service build. Domain assignment happens after the domain is added and verified in Render.
 
 
 ## 5. Environment variables
@@ -68,7 +68,7 @@ Render is the canonical single-service host (API + SPA from one origin, no CORS 
 
 **Server-only secrets** (never in repo, never in browser builds): `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_AI_API_KEY`, `OPENROUTER_API_KEY`, `OLLAMA_BASE_URL`, `RESEND_API_KEY`, `SENDGRID_API_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `S3_BUCKET_NAME`, `AWS_REGION`, `DATABASE_URL`.
 
-**Deployment rule**: set secrets in the provider's encrypted secret manager (Render dashboard env vars / Vercel project settings). Never commit `.env`. Rotate any accidentally exposed credential.
+**Deployment rule**: set secrets in the Render dashboard encrypted env vars. Never commit `.env`. Rotate any accidentally exposed credential.
 
 ## 6. Database & data
 

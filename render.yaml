@@ -1,4 +1,4 @@
-# Render deployment for NeuroAssess (replaces Vercel).
+# Render deployment for NeuroAssess.
 #
 # Single origin: the Express API (artifacts/api-server) serves /api/* and the
 # built Vite SPA (artifacts/neuroassess-web/dist) as static files with an SPA
