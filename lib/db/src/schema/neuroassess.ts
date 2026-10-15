@@ -300,6 +300,60 @@ export const aiDraftsTable = pgTable("ai_drafts", {
   updatedAt,
 });
 
+// --- Slice 1: slice task management ---
+export const sliceTasksTable = pgTable("slice_tasks", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull(),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  assigneeRole: text("assignee_role"),
+  status: text("status").notNull().default("open"), // open | done
+  createdAt,
+});
+
+// --- Slice 1: notifications ---
+export const notificationsTable = pgTable("notifications", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull(),
+  audience: text("audience").notNull(),
+  channel: text("channel").notNull(),
+  template: text("template").notNull(),
+  createdAt,
+});
+
+// --- Slice 1: intake submissions ---
+export const intakeSubmissionsTable = pgTable("intake_submissions", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  referralId: text("referral_id").notNull(),
+  patientId: text("patient_id").notNull(),
+  answers: jsonb("answers").notNull(),
+  questionnaireScores: jsonb("questionnaire_scores").notNull().default([]),
+  documentKinds: jsonb("document_kinds").notNull().default([]),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull(),
+  createdAt,
+});
+
+// --- Slice 1: consultation state ---
+export const consultationStatesTable = pgTable("consultation_states", {
+  clinicId: text("clinic_id"),
+  referralId: text("referral_id").notNull().unique(),
+  state: text("state").notNull(), // NOT_STARTED | CONSENT_REQUIRED | READY | LISTENING | PAUSED | STOPPED | PROCESSING | DRAFT_READY | CLINICIAN_REVIEW | SIGNED | AMENDED | FAILED
+  updatedAt,
+});
+
+// --- Slice 1: bookmarks ---
+export const bookmarksTable = pgTable("bookmarks", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  referralId: text("referral_id").notNull(),
+  segmentId: text("segment_id").notNull(),
+  label: text("label").notNull(),
+  createdAt,
+});
+
 export const insertClinicSchema = createInsertSchema(clinicsTable).omit({ createdAt: true, updatedAt: true });
 export const insertClinicMembershipSchema = createInsertSchema(clinicMembershipsTable).omit({ createdAt: true, updatedAt: true });
 export const insertProfileSchema = createInsertSchema(profilesTable).omit({ createdAt: true, updatedAt: true });
@@ -322,6 +376,11 @@ export const insertTimelineEventSchema = createInsertSchema(timelineEventsTable)
 export const insertConsultationConsentSchema = createInsertSchema(consultationConsentsTable).omit({ createdAt: true });
 export const insertTranscriptSegmentSchema = createInsertSchema(transcriptSegmentsTable).omit({ createdAt: true });
 export const insertAiDraftSchema = createInsertSchema(aiDraftsTable).omit({ createdAt: true, updatedAt: true });
+export const insertSliceTaskSchema = createInsertSchema(sliceTasksTable).omit({ createdAt: true });
+export const insertNotificationSchema = createInsertSchema(notificationsTable).omit({ createdAt: true });
+export const insertIntakeSubmissionSchema = createInsertSchema(intakeSubmissionsTable).omit({ createdAt: true });
+export const insertConsultationStateSchema = createInsertSchema(consultationStatesTable).omit({ updatedAt: true });
+export const insertBookmarkSchema = createInsertSchema(bookmarksTable).omit({ createdAt: true });
 
 export type InsertClinic = z.infer<typeof insertClinicSchema>;
 export type InsertClinicMembership = z.infer<typeof insertClinicMembershipSchema>;
@@ -348,3 +407,13 @@ export type InsertAiDraft = z.infer<typeof insertAiDraftSchema>;
 export type Referral = typeof referralsTable.$inferSelect;
 export type JourneyState = typeof journeyStatesTable.$inferSelect;
 export type AiDraft = typeof aiDraftsTable.$inferSelect;
+export type SliceTask = typeof sliceTasksTable.$inferSelect;
+export type Notification = typeof notificationsTable.$inferSelect;
+export type IntakeSubmission = typeof intakeSubmissionsTable.$inferSelect;
+export type ConsultationState = typeof consultationStatesTable.$inferSelect;
+export type Bookmark = typeof bookmarksTable.$inferSelect;
+export type InsertIntakeSubmission = z.infer<typeof insertIntakeSubmissionSchema>;
+export type InsertConsultationState = z.infer<typeof insertConsultationStateSchema>;
+export type InsertBookmark = z.infer<typeof insertBookmarkSchema>;
+export type InsertSliceTask = z.infer<typeof insertSliceTaskSchema>;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
