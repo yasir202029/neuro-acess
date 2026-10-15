@@ -120,6 +120,52 @@ export interface MdtNote {
   createdAt: string;
 }
 
+export interface JourneyStage {
+  stage:
+    | "REFERRAL"
+    | "INTAKE"
+    | "QUESTIONNAIRES"
+    | "ASSESSMENT"
+    | "CLINICAL_REVIEW"
+    | "OUTCOME"
+    | "REPORT"
+    | "FEEDBACK"
+    | "TREATMENT"
+    | "TITRATION"
+    | "MAINTENANCE_SHARED_CARE"
+    | "ONGOING_CARE_DISCHARGE";
+  status: "COMPLETED" | "ACTIVE" | "WAITING" | "BLOCKED" | "CLINICAL_REVIEW_REQUIRED";
+}
+
+export interface ClinicalJourneyState {
+  patientId: string;
+  pathway: string;
+  currentStage: string;
+  stages: JourneyStage[];
+  nextStage: string;
+  safetyGates: string[];
+}
+
+export interface WorkQueueSummary {
+  newReferrals: number;
+  waitingForForms: number;
+  appointmentRequired: number;
+  clinicianAssignmentRequired: number;
+  reportPending: number;
+  followUpRequired: number;
+  adminActionRequired: number;
+}
+
+export interface SystemServiceStatus {
+  name: string;
+  status: "operational" | "degraded" | "standby" | "maintenance";
+}
+
+export interface SystemStatusResponse {
+  services: SystemServiceStatus[];
+  timestamp: string;
+}
+
 export interface Paginated<T> {
   items: T[];
   total: number;
@@ -150,4 +196,11 @@ export const workstationApi = {
     api.post<MdtNote>(`/workstation/patients/${patientId}/mdt-notes`, body),
   acknowledgeAlert: (patientId: string, alertId: string) =>
     api.post<ClinicalAlert>(`/workstation/patients/${patientId}/alerts/${alertId}/acknowledge`, {}),
+
+  getJourney: (patientId: string) =>
+    api.get<ClinicalJourneyState>(`/workstation/patients/${patientId}/journey`),
+
+  getWorkQueue: () => api.get<WorkQueueSummary>("/workstation/queue"),
+
+  getSystemStatus: () => api.get<SystemStatusResponse>("/system/status"),
 };

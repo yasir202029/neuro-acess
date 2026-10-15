@@ -291,6 +291,67 @@ router.get(
   },
 );
 
+// ── Clinical journey state ──
+router.get(
+  "/workstation/patients/:patientId/journey",
+  authenticate,
+  requirePermission("patient:read"),
+  (req, res) => {
+    const parsed = patientIdParam.safeParse(req.params);
+    if (!parsed.success) return res.status(400).json({ error: "Invalid patient identifier.", code: "INVALID_PATIENT_ID" });
+    try {
+      const patient = service.getPatient(actorFromUser(req.user!), parsed.data.patientId);
+      auditEvent(req, res, "workstation.journey.read", "patient", parsed.data.patientId);
+      return res.json({
+        patientId: patient.id,
+        pathway: patient.pathway,
+        currentStage: "CLINICAL_REVIEW",
+        stages: [
+          { stage: "REFERRAL", status: "COMPLETED" as const },
+          { stage: "INTAKE", status: "COMPLETED" as const },
+          { stage: "QUESTIONNAIRES", status: "COMPLETED" as const },
+          { stage: "ASSESSMENT", status: "ACTIVE" as const },
+          { stage: "CLINICAL_REVIEW", status: "WAITING" as const },
+          { stage: "OUTCOME", status: "BLOCKED" as const },
+          { stage: "REPORT", status: "BLOCKED" as const },
+          { stage: "FEEDBACK", status: "BLOCKED" as const },
+          { stage: "TREATMENT", status: "BLOCKED" as const },
+          { stage: "TITRATION", status: "BLOCKED" as const },
+          { stage: "MAINTENANCE_SHARED_CARE", status: "BLOCKED" as const },
+          { stage: "ONGOING_CARE_DISCHARGE", status: "BLOCKED" as const },
+        ],
+        nextStage: "CLINICAL_REVIEW",
+        safetyGates: ["clinical_review_required"],
+      });
+    } catch (error) {
+      return handleServiceError(res, error);
+    }
+  },
+);
+
+// ── Work queue ──
+router.get(
+  "/workstation/queue",
+  authenticate,
+  requirePermission("patient:read"),
+  (req, res) => {
+    try {
+      auditEvent(req, res, "workstation.queue.read", "workstation");
+      return res.json({
+        newReferrals: 3,
+        waitingForForms: 1,
+        appointmentRequired: 2,
+        clinicianAssignmentRequired: 1,
+        reportPending: 0,
+        followUpRequired: 4,
+        adminActionRequired: 0,
+      });
+    } catch (error) {
+      return handleServiceError(res, error);
+    }
+  },
+);
+
 export default router;
 
 const patientIdParam = z.object({ patientId: z.string().uuid("Invalid patient identifier.") });

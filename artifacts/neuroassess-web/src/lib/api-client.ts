@@ -7,7 +7,7 @@
  *   ClarityErrorState / ClarityEmptyState correctly.
  */
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE ?? process.env.VITE_API_BASE ?? "/api/v1";
+  process.env.NEXT_PUBLIC_API_BASE ?? process.env.VITE_API_BASE ?? "/api";
 
 export class ApiError extends Error {
   readonly status: number;
