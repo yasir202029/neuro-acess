@@ -61,6 +61,9 @@ Render is the canonical single-service host (API + SPA from one origin, no CORS 
 
 **Render (single deployment target)**: All NeuroAssess applications — the canonical SPA at `artifacts/neuroassess-web/` and the API at `artifacts/api-server/` — deploy as Render web services. Each environment (development, staging, production) runs its own Render service. Feature branches render preview deployments via the same Render single-service build. Domain assignment happens after the domain is added and verified in Render.
 
+**Railway (alternative / multi-region target)**: The same workspace deploys to Railway via `railway.toml` (Nixpacks builder) and the `cd-railway.yml` pipeline. Railway is used for multi-region failover, preview environments, or as a secondary cloud provider. Each environment maps to a Railway environment (development/staging/production), and the Railway Postgres add-on can serve as a managed database alternative to Supabase. Domain assignment happens after the domain is added and verified in Railway.
+
+
 
 ## 5. Environment variables
 

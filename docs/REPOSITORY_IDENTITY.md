@@ -15,7 +15,7 @@
 | Primary UI path | `artifacts/neuroassess-web/` |
 | API (canonical) | `artifacts/api-server/` (Express 5) — the backend the UI targets |
 | Database source of truth | Managed Postgres via Supabase (Drizzle schema in `lib/db`) |
-| Deployment targets | Render (single-service: API + SPA from one origin); self-hosted Node/Postgres behind a reverse proxy for non-Render |
+| Deployment targets | Render (single-service: API + SPA from one origin) and Railway (Nixpacks, multi-region/alternative); self-hosted Node/Postgres behind a reverse proxy for non-cloud |
 | Branch of record | `feat/foundation-care-journey` (this work); `main` is the integration baseline |
 
 ## Directories that belong to NeuroAssess (canonical)

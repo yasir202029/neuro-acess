@@ -1,0 +1,33 @@
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm install --frozen-lockfile && pnpm run build"
+startCommand = "pnpm --filter @workspace/api-server start"
+
+[deploy]
+healthcheckPath = "/api/healthz"
+healthcheckTimeout = 120
+restartPolicyType = "on-failure"
+restartPolicyMaxRetries = 10
+
+[[services]]
+name = "neuroassess-api"
+source = "."
+dockerfile = "Dockerfile"
+autoDeploy = true
+enablePublicNetworking = true
+
+[[services.postgres]]
+name = "neuroassess-db"
+plan = "developer"
+
+[[variables]]
+name = "NODE_ENV"
+value = "production"
+
+[[variables]]
+name = "NODE_VERSION"
+value = "24.21.0"
+
+[[variables]]
+name = "PORT"
+value = "10000"
