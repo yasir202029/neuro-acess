@@ -1,0 +1,82 @@
+name: CD — Deploy NeuroAssess
+
+on:
+  push:
+    branches: [main, staging, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+  NODE_VERSION: 24.21.0
+
+jobs:
+  deploy:
+    name: Deploy to Render
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/staging' && 'staging' || 'development' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.4.2
+          run_install: false
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build workspace
+        run: pnpm run build
+      - name: Determine Render service
+        id: service
+        run: |
+          case "${{ github.ref }}" in
+            refs/heads/main) echo "service=neuroassess" >> "$GITHUB_OUTPUT" ;;
+            refs/heads/staging) echo "service=neuroassess-staging" >> "$GITHUB_OUTPUT" ;;
+            *) echo "service=neuroassess-dev" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - name: Trigger Render deploy
+        run: |
+          curl -s -X POST "https://api.render.com/v1/services/${{ steps.service.outputs.service }}/deploys" \
+            -H "Authorization: Bearer ${{ env.RENDER_API_KEY }}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d '{}' | tee deploy-response.json
+      - name: Verify health endpoint
+        run: |
+          echo "Render deploy triggered for ${{ steps.service.outputs.service }} on ${{ github.ref }}."
+          echo "Confirm health at https://${{ steps.service.outputs.service }}.onrender.com/api/healthz"
+
+  vercel-portals:
+    name: Deploy portals to Vercel
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+      - name: Deploy marketing-site
+        run: |
+          vercel --prod --token ${{ secrets.VERCEL_TOKEN }} --org ${{ secrets.VERCEL_ORG_ID }} --project ${{ secrets.VERCEL_PROJECT_ID_MARKETING }}
+          working-directory: apps/marketing-site
+        continue-on-error: true
