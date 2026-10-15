@@ -16,7 +16,7 @@
 | Database | Drizzle ORM over Postgres/Supabase (`lib/db`), `drizzle-kit push` scripts, migrations dir present |
 | ORM | drizzle-orm + drizzle-zod |
 | Authentication | Supabase JWT verified server-side (`api-server/src/security/auth.ts` → `Bearer` token → role from `app_metadata`); client demo sign-in behind `unifiedApplicationShell` flag only |
-| Deployment | Vercel-approved SPA; ENVIRONMENT.md documents env/secrets; API is a Node service |
+| Deployment | Render-approved SPA; ENVIRONMENT.md documents env/secrets; API is a Node service |
 | Existing tests | 50 vitest tests across `packages/*` and `artifacts/neuroassess-web/src/platform` — all passing at audit |
 
 ## 2. Existing strengths to preserve

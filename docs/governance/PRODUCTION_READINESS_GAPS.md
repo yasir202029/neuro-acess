@@ -51,6 +51,6 @@
 
 ## Unverified
 
-- Vercel deployment of the API server process (SPA deploys; API deployment target unverified).
+- Render deployment of the API server process (SPA deploys; API deployment target verified).
 - `pnpm --filter @workspace/db push` against production Supabase (not run).
 - Bundle-size trend and real server p95 (see PERFORMANCE_BUDGET.md).

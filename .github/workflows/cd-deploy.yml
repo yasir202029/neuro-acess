@@ -64,19 +64,3 @@ jobs:
         run: |
           echo "Render deploy triggered for ${{ steps.service.outputs.service }} on ${{ github.ref }}."
           echo "Confirm health at https://${{ steps.service.outputs.service }}.onrender.com/api/healthz"
-
-  vercel-portals:
-    name: Deploy portals to Vercel
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
-    runs-on: ubuntu-latest
-    needs: deploy
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install Vercel CLI
-        run: npm install -g vercel@latest
-      - name: Deploy marketing-site
-        run: |
-          vercel --prod --token ${{ secrets.VERCEL_TOKEN }} --org ${{ secrets.VERCEL_ORG_ID }} --project ${{ secrets.VERCEL_PROJECT_ID_MARKETING }}
-          working-directory: apps/marketing-site
-        continue-on-error: true
