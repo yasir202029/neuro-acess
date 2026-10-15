@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { hasPermission, type Permission, type PlatformRole, platformRoles } from "./roles";
 
 type AuthenticatedUser = { id: string; email: string; role: PlatformRole; clinicId: string | null };
+export type { AuthenticatedUser };
 declare global { namespace Express { interface Request { user?: AuthenticatedUser; } } }
 
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
