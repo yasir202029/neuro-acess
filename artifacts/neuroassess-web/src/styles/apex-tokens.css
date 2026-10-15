@@ -1,0 +1,96 @@
+/* ============================================================================
+   APEX Visual Engine — design tokens
+   Clinical operating system design system.
+   Every colour is paired with an explicit label so status is never
+   communicated by colour alone.
+   ============================================================================ */
+
+:root {
+  /* Surface levels (L0–L4) */
+  --apex-surface-l0: 210 33% 98%;
+  --apex-surface-l1: 0 0% 100%;
+  --apex-surface-l2: 210 25% 96%;
+  --apex-surface-l3: 0 0% 100%;
+  --apex-surface-l4: 0 0% 100%;
+
+  /* Colour palette */
+  --apex-clinical-blue: 214 72% 32%;
+  --apex-operational-teal: 160 60% 35%;
+  --apex-neutral-slate: 215 20% 35%;
+  --apex-success-green: 140 60% 35%;
+  --apex-amber-warning: 35 85% 50%;
+  --apex-critical-red: 3 54% 48%;
+  --apex-information-cyan: 195 82% 66%;
+  --apex-review-purple: 260 70% 45%;
+  --apex-waiting-grey: 210 15% 55%;
+
+  /* Typography */
+  --apex-font-display: 'Instrument Serif', Georgia, serif;
+  --apex-font-workstation-heading: 'DM Sans', sans-serif;
+  --apex-font-panel-heading: 'DM Sans', sans-serif;
+  --apex-font-body: 'DM Sans', sans-serif;
+  --apex-font-clinical-metadata: 'DM Mono', monospace;
+  --apex-font-compact-table: 'DM Sans', sans-serif;
+  --apex-font-status-label: 'DM Sans', sans-serif;
+  --apex-font-mono-identifier: 'DM Mono', monospace;
+
+  /* Spacing */
+  --apex-spacing-condensed: 0.5rem;
+  --apex-spacing-standard: 1rem;
+  --apex-spacing-comfortable: 1.5rem;
+}
+
+.dark {
+  --apex-surface-l0: 153 16% 12%;
+  --apex-surface-l1: 153 15% 16%;
+  --apex-surface-l2: 153 14% 18%;
+  --apex-surface-l3: 153 15% 16%;
+  --apex-surface-l4: 153 15% 16%;
+  --apex-clinical-blue: 151 35% 63%;
+  --apex-operational-teal: 160 60% 45%;
+  --apex-neutral-slate: 215 15% 30%;
+  --apex-success-green: 140 60% 45%;
+  --apex-amber-warning: 35 85% 55%;
+  --apex-critical-red: 3 54% 58%;
+  --apex-information-cyan: 195 82% 70%;
+  --apex-review-purple: 260 70% 55%;
+  --apex-waiting-grey: 210 15% 45%;
+}
+
+/* ============================================================================
+   APEX Surface levels — utility classes
+   ============================================================================ */
+.surface-l0 { background-color: hsl(var(--apex-surface-l0)); }
+.surface-l1 {
+  background-color: hsl(var(--apex-surface-l1));
+  border-color: hsl(var(--border));
+}
+.surface-l2 {
+  background-color: hsl(var(--apex-surface-l2));
+  border-color: hsl(var(--border));
+}
+.surface-l3 {
+  background-color: hsl(var(--apex-surface-l3));
+  border-color: hsl(var(--border));
+}
+.surface-l4 {
+  background-color: hsl(var(--apex-surface-l4));
+  border-color: hsl(var(--border));
+}
+
+/* ============================================================================
+   APEX Status colours — always paired with an explicit label in components
+   ============================================================================ */
+.badge-active   { background-color: hsl(var(--apex-clinical-blue) / 0.12); border: 1px solid hsl(var(--apex-clinical-blue) / 0.4); color: hsl(var(--apex-clinical-blue)); }
+.badge-waiting  { background-color: hsl(var(--apex-waiting-grey) / 0.12); border: 1px solid hsl(var(--apex-waiting-grey) / 0.4); color: hsl(var(--apex-waiting-grey)); }
+.badge-completed{ background-color: hsl(var(--apex-success-green) / 0.12); border: 1px solid hsl(var(--apex-success-green) / 0.4); color: hsl(var(--apex-success-green)); }
+.badge-overdue  { background-color: hsl(var(--apex-critical-red) / 0.12); border: 1px solid hsl(var(--apex-critical-red) / 0.4); color: hsl(var(--apex-critical-red)); }
+.badge-blocked  { background-color: hsl(var(--apex-critical-red) / 0.12); border: 1px solid hsl(var(--apex-critical-red) / 0.4); color: hsl(var(--apex-critical-red)); }
+.badge-review   { background-color: hsl(var(--apex-review-purple) / 0.12); border: 1px solid hsl(var(--apex-review-purple) / 0.4); color: hsl(var(--apex-review-purple)); }
+.badge-unsigned { background-color: hsl(var(--apex-amber-warning) / 0.12); border: 1px solid hsl(var(--apex-amber-warning) / 0.4); color: hsl(var(--apex-amber-warning)); }
+.badge-approved { background-color: hsl(var(--apex-success-green) / 0.12); border: 1px solid hsl(var(--apex-success-green) / 0.4); color: hsl(var(--apex-success-green)); }
+.badge-cancelled{ background-color: hsl(var(--apex-neutral-slate) / 0.12); border: 1px solid hsl(var(--apex-neutral-slate) / 0.4); color: hsl(var(--apex-neutral-slate)); }
+.badge-failed   { background-color: hsl(var(--apex-critical-red) / 0.12); border: 1px solid hsl(var(--apex-critical-red) / 0.4); color: hsl(var(--apex-critical-red)); }
+.badge-archived { background-color: hsl(var(--apex-neutral-slate) / 0.12); border: 1px solid hsl(var(--apex-neutral-slate) / 0.4); color: hsl(var(--apex-neutral-slate)); }
+.badge-info     { background-color: hsl(var(--apex-information-cyan) / 0.12); border: 1px solid hsl(var(--apex-information-cyan) / 0.4); color: hsl(var(--apex-information-cyan)); }
+.badge-safety   { background-color: hsl(var(--apex-critical-red) / 0.15); border: 1px solid hsl(var(--apex-critical-red) / 0.5); color: hsl(var(--apex-critical-red)); }
