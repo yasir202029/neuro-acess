@@ -21,6 +21,14 @@ export default defineConfig({
     'process.env.NEXT_PUBLIC_CLINICIAN_PORTAL_URL': JSON.stringify(process.env.NEXT_PUBLIC_CLINICIAN_PORTAL_URL ?? ''),
     'process.env.NEXT_PUBLIC_SUPABASE_URL': JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''),
     'process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY': JSON.stringify(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''),
+    // Feature-flag env layer baked at build time (client flags are rendering
+    // only; the server independently enforces). Production flag defaults are
+    // off, so deployments enable the shell/workspaces via NEUROCARE_FLAG_*.
+    ...Object.fromEntries(
+      Object.entries(process.env)
+        .filter(([key]) => key.startsWith('NEUROCARE_FLAG_'))
+        .map(([key, value]) => [`process.env.${key}`, JSON.stringify(value ?? '')]),
+    ),
   },
   plugins: [
     react(),

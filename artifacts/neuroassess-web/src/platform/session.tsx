@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -11,6 +12,13 @@ import {
   type Capability,
   type PlatformRole,
 } from "@neurocare/permissions";
+import {
+  getSupabaseSession,
+  onSupabaseAuthChange,
+  signOutSupabase,
+  type SupabaseSession,
+} from "@/lib/supabase-auth";
+
 
 /**
  * Client session model.
@@ -48,6 +56,50 @@ export type WorkspaceId = "patient" | "clinician" | "admin" | "finance";
 const SessionContext = createContext<SessionValue | null>(null);
 
 const STORAGE_KEY = "neuroassess.session.v1";
+
+/**
+ * Decode the role claim from a Supabase JWT without verifying (verification
+ * happens server-side on every API call). The payload is used ONLY to render
+ * the correct workspace shell; it never grants access.
+ */
+function rolesFromToken(token: string): PlatformRole[] {
+  try {
+    const payload = JSON.parse(
+      atob(token.split(".")[1]!.replace(/-/g, "+").replace(/_/g, "/")),
+    ) as {
+      app_metadata?: { role?: unknown };
+      user_metadata?: { role?: unknown };
+    };
+    const raw = payload.app_metadata?.role ?? payload.user_metadata?.role;
+    const valid: readonly string[] = [
+      "SUPER_ADMIN",
+      "ADMIN",
+      "CLINICIAN",
+      "PATIENT",
+      "RECEPTIONIST",
+      "FINANCE",
+      "REFERRER",
+      "CORPORATE_CLIENT",
+      "SUPPORT_AGENT",
+    ];
+    if (typeof raw === "string" && valid.includes(raw)) return [raw as PlatformRole];
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function userFromSupabase(session: SupabaseSession): SessionUser | null {
+  if (!session) return null;
+  const roles = rolesFromToken(session.accessToken);
+  if (roles.length === 0) return null;
+  return {
+    id: session.userId,
+    name: session.email,
+    email: session.email,
+    roles,
+  };
+}
 
 function readStoredSession(): SessionUser | null {
   try {
@@ -120,6 +172,33 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     readStoredSession(),
   );
 
+  // Mirror the Supabase session (when configured) into the client session.
+  // This only drives workspace rendering; every API call is re-verified
+  // server-side. Falls back to the synthetic session when Supabase is absent.
+  useEffect(() => {
+    let cancelled = false;
+    getSupabaseSession().then((session) => {
+      if (!cancelled && session) {
+        const mapped = userFromSupabase(session);
+        if (mapped) setUser(mapped);
+      }
+    });
+    const unsubscribe = onSupabaseAuthChange((session) => {
+      if (cancelled) return;
+      const mapped = session ? userFromSupabase(session) : null;
+      if (mapped) {
+        setUser(mapped);
+        try {
+          globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify(mapped));
+        } catch { /* storage unavailable */ }
+      }
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
+
   const signIn = useCallback((next: SessionUser) => {
     setUser(next);
     try {
@@ -130,6 +209,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(() => {
+    void signOutSupabase();
     setUser(null);
     try {
       globalThis.localStorage?.removeItem(STORAGE_KEY);

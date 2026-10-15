@@ -22,6 +22,11 @@ export interface FlagsValue {
 // Build-time environment snapshot (vite `define` replaces process.env.*).
 const buildEnv: Record<string, string | undefined> = {
   NEUROCARE_ENV: import.meta.env.MODE as string | undefined,
+  NEUROCARE_FLAG_UNIFIED_APPLICATION_SHELL: process.env.NEUROCARE_FLAG_UNIFIED_APPLICATION_SHELL,
+  NEUROCARE_FLAG_PATIENT_WORKSPACE: process.env.NEUROCARE_FLAG_PATIENT_WORKSPACE,
+  NEUROCARE_FLAG_CLINICIAN_WORKSTATION: process.env.NEUROCARE_FLAG_CLINICIAN_WORKSTATION,
+  NEUROCARE_FLAG_ADMIN_CONTROL_CENTRE: process.env.NEUROCARE_FLAG_ADMIN_CONTROL_CENTRE,
+  NEUROCARE_FLAG_FINANCE_WORKSPACE: process.env.NEUROCARE_FLAG_FINANCE_WORKSPACE,
 };
 
 export function useFlags(
