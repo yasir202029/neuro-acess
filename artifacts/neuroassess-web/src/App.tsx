@@ -68,6 +68,7 @@ import { ReportBuilder } from '@/components/report-builder';
 import { FinanceDashboard } from '@/components/finance-dashboard';
 import { RolePortal } from '@/components/role-portal';
 import { TeamManagement } from '@/components/team-management';
+import { ClinicianWorkstation } from '@/components/workstation/clinician-workstation';
 import { SessionProvider, RequireWorkspace, type WorkspaceId } from '@/platform';
 import { SignInPage } from '@/components/sign-in';
 import type { FeatureFlag } from '@neurocare/feature-flags';
@@ -421,6 +422,7 @@ function AppRouter() {
     <Route path="/clinician/messages"><GuardedPortal workspace="clinician" role="clinician" /></Route>
     <Route path="/clinician/tasks"><GuardedPortal workspace="clinician" role="clinician" /></Route>
     <Route path="/clinician/earnings"><GuardedPortal workspace="clinician" role="clinician" /></Route>
+    <Route path="/clinician/workstation"><ClinicianWorkstation /></Route>
     <Route path="/clinician/session/:id"><GuardedPortal workspace="clinician" role="clinician" /></Route>
     <Route path="/admin"><GuardedPortal workspace="admin" role="admin" /></Route>
     <Route path="/admin/users"><GuardedPortal workspace="admin" role="admin" /></Route>
