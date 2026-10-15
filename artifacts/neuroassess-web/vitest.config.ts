@@ -16,6 +16,7 @@ export default defineConfig({
       "@neurocare/audit": pkg("audit"),
       "@neurocare/notifications": pkg("notifications"),
       "@neurocare/timeline": pkg("timeline"),
+      "@neurocare/clarity": path.resolve(dir, "..", "..", "packages", "clarity", "src"),
     },
   },
   define: {

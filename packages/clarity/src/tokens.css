@@ -1,0 +1,158 @@
+/**
+ * Clarity Health Design System — semantic design tokens.
+ *
+ * These CSS custom properties are the single source of truth for colour,
+ * spacing, density, typography and status semantics. Components must consume
+ * tokens, never raw colours, so themes (light / dark / high-contrast /
+ * patient-calm) and density modes can be swapped by toggling a data attribute.
+ *
+ * Never communicate clinical status with colour alone: every status token is
+ * paired with an icon + text label in the component layer.
+ */
+:root {
+  /* Surfaces */
+  --clarity-bg-canvas: 210 33% 97%;
+  --clarity-bg-surface: 0 0% 100%;
+  --clarity-bg-elevated: 0 0% 100%;
+  --clarity-bg-subtle: 210 29% 95%;
+
+  /* Text */
+  --clarity-text-primary: 213 34% 14%;
+  --clarity-text-secondary: 214 20% 34%;
+  --clarity-text-muted: 213 14% 48%;
+  --clarity-text-inverse: 0 0% 100%;
+
+  /* Borders */
+  --clarity-border-default: 214 26% 86%;
+  --clarity-border-strong: 214 24% 72%;
+  --clarity-border-focus: 214 90% 42%;
+
+  /* Actions */
+  --clarity-action-primary: 190 78% 26%;
+  --clarity-action-primary-fg: 0 0% 100%;
+  --clarity-action-secondary: 210 40% 96%;
+  --clarity-action-secondary-fg: 190 78% 22%;
+
+  /* Status */
+  --clarity-status-information: 214 84% 42%;
+  --clarity-status-success: 158 62% 30%;
+  --clarity-status-warning: 32 92% 40%;
+  --clarity-status-danger: 3 62% 46%;
+
+  /* Clinical */
+  --clarity-clinical-normal: 158 55% 32%;
+  --clarity-clinical-review: 40 90% 44%;
+  --clarity-clinical-abnormal: 24 82% 44%;
+  --clarity-clinical-critical: 0 70% 42%;
+
+  /* Risk */
+  --clarity-risk-low: 158 55% 34%;
+  --clarity-risk-moderate: 40 88% 42%;
+  --clarity-risk-high: 24 80% 44%;
+  --clarity-risk-urgent: 0 72% 44%;
+
+  /* Prescription state machine */
+  --clarity-prescription-draft: 213 16% 52%;
+  --clarity-prescription-pending: 40 88% 40%;
+  --clarity-prescription-approved: 158 55% 32%;
+  --clarity-prescription-rejected: 0 66% 44%;
+  --clarity-prescription-dispensed: 214 84% 42%;
+
+  /* Density scale (compact staff vs comfortable patient) */
+  --clarity-density-row: 2.75rem;
+  --clarity-density-gap: 1rem;
+  --clarity-density-pad: 1rem;
+  --clarity-density-control: 2.5rem;
+  --clarity-density-text: 0.875rem;
+
+  /* Radii */
+  --clarity-radius-sm: 0.375rem;
+  --clarity-radius-md: 0.625rem;
+  --clarity-radius-lg: 1rem;
+
+  /* Elevation — subtle depth, no heavy shadows */
+  --clarity-elevation-1: 0 1px 2px 0 hsl(214 30% 20% / 0.06);
+  --clarity-elevation-2: 0 2px 8px -2px hsl(214 30% 20% / 0.10);
+  --clarity-elevation-3: 0 8px 24px -8px hsl(214 30% 20% / 0.16);
+
+  /* Motion */
+  --clarity-motion-fast: 120ms cubic-bezier(0.2, 0, 0.2, 1);
+  --clarity-motion-base: 200ms cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+/* ===== Themes ===== */
+
+[data-clarity-theme="dark"] {
+  --clarity-bg-canvas: 214 32% 10%;
+  --clarity-bg-surface: 214 30% 14%;
+  --clarity-bg-elevated: 214 28% 18%;
+  --clarity-bg-subtle: 214 28% 12%;
+  --clarity-text-primary: 210 30% 94%;
+  --clarity-text-secondary: 212 18% 74%;
+  --clarity-text-muted: 212 14% 58%;
+  --clarity-text-inverse: 214 32% 10%;
+  --clarity-border-default: 214 22% 26%;
+  --clarity-border-strong: 214 20% 38%;
+  --clarity-border-focus: 197 90% 60%;
+  --clarity-action-primary: 197 70% 44%;
+  --clarity-action-secondary: 214 26% 20%;
+  --clarity-action-secondary-fg: 197 60% 78%;
+}
+
+[data-clarity-theme="high-contrast"] {
+  --clarity-bg-canvas: 0 0% 100%;
+  --clarity-bg-surface: 0 0% 100%;
+  --clarity-bg-elevated: 0 0% 100%;
+  --clarity-bg-subtle: 0 0% 96%;
+  --clarity-text-primary: 0 0% 0%;
+  --clarity-text-secondary: 0 0% 12%;
+  --clarity-text-muted: 0 0% 20%;
+  --clarity-border-default: 0 0% 22%;
+  --clarity-border-strong: 0 0% 10%;
+  --clarity-border-focus: 0 0% 0%;
+  --clarity-action-primary: 220 90% 26%;
+  --clarity-status-success: 150 90% 22%;
+  --clarity-status-warning: 30 100% 28%;
+  --clarity-status-danger: 0 90% 32%;
+  --clarity-clinical-normal: 150 90% 22%;
+  --clarity-clinical-review: 30 100% 28%;
+  --clarity-clinical-abnormal: 24 95% 32%;
+  --clarity-clinical-critical: 0 95% 30%;
+  --clarity-risk-low: 150 90% 22%;
+  --clarity-risk-moderate: 30 100% 28%;
+  --clarity-risk-high: 24 95% 32%;
+  --clarity-risk-urgent: 0 95% 30%;
+}
+
+/* ===== Density modes ===== */
+
+[data-clarity-density="compact"] {
+  --clarity-density-row: 2.25rem;
+  --clarity-density-gap: 0.625rem;
+  --clarity-density-pad: 0.75rem;
+  --clarity-density-control: 2.25rem;
+  --clarity-density-text: 0.8125rem;
+}
+
+/* Patient calm mode: larger targets, generous spacing, softer text */
+[data-clarity-mode="patient-calm"] {
+  --clarity-density-row: 3.25rem;
+  --clarity-density-gap: 1.5rem;
+  --clarity-density-pad: 1.5rem;
+  --clarity-density-control: 3rem;
+  --clarity-density-text: 1rem;
+  --clarity-bg-canvas: 168 30% 96%;
+}
+
+/* Reduced motion: user preference or system setting */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --clarity-motion-fast: 0ms;
+    --clarity-motion-base: 0ms;
+  }
+}
+
+[data-clarity-motion="reduced"] {
+  --clarity-motion-fast: 0ms;
+  --clarity-motion-base: 0ms;
+}

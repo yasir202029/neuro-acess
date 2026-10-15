@@ -49,6 +49,7 @@ export default defineConfig({
       '@neurocare/audit': path.resolve(import.meta.dirname, '..', '..', 'packages', 'audit', 'src', 'index.ts'),
       '@neurocare/notifications': path.resolve(import.meta.dirname, '..', '..', 'packages', 'notifications', 'src', 'index.ts'),
       '@neurocare/timeline': path.resolve(import.meta.dirname, '..', '..', 'packages', 'timeline', 'src', 'index.ts'),
+      '@neurocare/clarity': path.resolve(import.meta.dirname, '..', '..', 'packages', 'clarity', 'src'),
     },
     dedupe: ['react', 'react-dom'],
   },
