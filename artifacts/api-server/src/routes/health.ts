@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { pool } from "@workspace/db";
+import { authenticate } from "../security/auth";
 
 const router: IRouter = Router();
 
@@ -15,11 +16,11 @@ router.get("/healthz", async (_req, res) => {
 });
 
 /**
- * System status strip — operational status for workstation status displays.
- * Only reports aggregated status, never sensitive infrastructure internals.
- * Accessible to authenticated clinical and admin roles.
+ * System status stream — operational status for workstation status displays.
+ * Requires authentication. Reports aggregated status only, never sensitive
+ * infrastructure internals.
  */
-router.get("/system/status", async (_req, res) => {
+router.get("/system/status", authenticate, async (_req, res) => {
   let dbStatus = "unavailable";
   try {
     await pool.query("SELECT 1");
