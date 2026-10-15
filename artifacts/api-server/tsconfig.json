@@ -4,8 +4,18 @@
     "incremental": true,
     "tsBuildInfoFile": ".tsbuildinfo",
     "outDir": "dist",
-    "rootDir": "src",
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@neurocare/permissions": ["../../packages/permissions/src/index.ts"],
+      "@neurocare/journey": ["../../packages/journey/src/index.ts"],
+      "@neurocare/workflow-engine": [
+        "../../packages/workflow-engine/src/index.ts"
+      ],
+      "@neurocare/timeline": ["../../packages/timeline/src/index.ts"],
+      "@neurocare/audit": ["../../packages/audit/src/index.ts"],
+      "@neurocare/feature-flags": ["../../packages/feature-flags/src/index.ts"],
+      "@neurocare/notifications": ["../../packages/notifications/src/index.ts"]
+    }
   },
   "include": ["src"],
   "references": [

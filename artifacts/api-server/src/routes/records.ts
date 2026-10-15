@@ -7,7 +7,7 @@ const vitalTypes = new Set(["BLOOD_PRESSURE", "HEART_RATE", "WEIGHT_KG", "TEMPER
 router.post("/patients/:patientId/files", requirePermission("document:write"), (req, res) => {
   if (!isUuid(req.params.patientId)) return res.status(400).json({ error: "Invalid patient identifier." });
   auditEvent(req, res, "patient_file.upload.request", "patient", req.params.patientId);
-  return res.status(503).json({ error: "Secure upload storage is unavailable until Vercel Blob and the tenant repository are configured.", code: "FILE_STORAGE_UNAVAILABLE" });
+  return res.status(503).json({ error: "Secure upload storage is unavailable until object storage (Supabase Storage or S3) and the tenant repository are configured.", code: "FILE_STORAGE_UNAVAILABLE" });
 });
 router.post("/patients/:patientId/physical-health", requirePermission("patient:write"), (req, res) => {
   if (!isUuid(req.params.patientId)) return res.status(400).json({ error: "Invalid patient identifier." });

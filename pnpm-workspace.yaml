@@ -36,9 +36,11 @@ minimumReleaseAgeExclude:
 
 packages:
   - backend
+  - apps/*
   - artifacts/*
   - lib/*
   - lib/integrations/*
+  - packages/*
   - scripts
 
 catalog:
@@ -158,3 +160,4 @@ allowBuilds:
   '@prisma/engines': true
   esbuild: false
   prisma: true
+  sharp: set this to true or false

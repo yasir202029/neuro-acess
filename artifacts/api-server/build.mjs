@@ -10,6 +10,12 @@ globalThis.require = createRequire(import.meta.url);
 
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 
+// The @neurocare/* platform spine ships as TypeScript sources (workspace
+// packages with `"exports": "./src/index.ts"`), so esbuild resolves them from
+// source. Keep in sync with tsconfig `paths` and the root vitest aliases.
+const neurocare = (name) =>
+  path.resolve(artifactDir, "..", "..", "packages", name, "src", "index.ts");
+
 async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
   await rm(distDir, { recursive: true, force: true });
@@ -22,6 +28,15 @@ async function buildAll() {
     outdir: distDir,
     outExtension: { ".js": ".mjs" },
     logLevel: "info",
+    alias: {
+      "@neurocare/permissions": neurocare("permissions"),
+      "@neurocare/journey": neurocare("journey"),
+      "@neurocare/workflow-engine": neurocare("workflow-engine"),
+      "@neurocare/timeline": neurocare("timeline"),
+      "@neurocare/audit": neurocare("audit"),
+      "@neurocare/feature-flags": neurocare("feature-flags"),
+      "@neurocare/notifications": neurocare("notifications"),
+    },
     // Some packages may not be bundleable, so we externalize them, we can add more here as needed.
     // Some of the packages below may not be imported or installed, but we're adding them in case they are in the future.
     // Examples of unbundleable packages:
