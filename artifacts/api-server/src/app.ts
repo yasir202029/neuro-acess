@@ -89,6 +89,7 @@ const webDistCandidates = [
   process.env.WEB_DIST_DIR ?? "",
   path.resolve(artifactDir, "..", "neuroassess-web", "dist"),
   path.resolve(artifactDir, "..", "..", "neuroassess-web", "dist"),
+  path.resolve(artifactDir, "..", "..", "..", "artifacts", "neuroassess-web", "dist"),
 ].filter(Boolean);
 const webDistDir = webDistCandidates.find((dir) => existsSync(path.join(dir, "index.html"))) ?? webDistCandidates[0]!;
 app.use(express.static(webDistDir, { index: false, maxAge: "1h", immutable: false }));
