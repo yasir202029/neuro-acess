@@ -146,14 +146,97 @@ export interface ClinicalJourneyState {
   safetyGates: string[];
 }
 
-export interface WorkQueueSummary {
-  newReferrals: number;
-  waitingForForms: number;
-  appointmentRequired: number;
-  clinicianAssignmentRequired: number;
-  reportPending: number;
-  followUpRequired: number;
-  adminActionRequired: number;
+export type WorkQueueStatus =
+  | "NEW"
+  | "WAITING_FOR_FORMS"
+  | "WAITING_FOR_INFORMANT"
+  | "APPOINTMENT_REQUIRED"
+  | "CLINICIAN_ASSIGNMENT_REQUIRED"
+  | "ASSESSMENT_PREPARATION"
+  | "ASSESSMENT_COMPLETE_REVIEW_REQUIRED"
+  | "REPORT_PENDING"
+  | "PAYMENT_REQUIRED"
+  | "TITRATION_REVIEW_DUE"
+  | "VITALS_REQUIRED"
+  | "PRESCRIPTION_ADMINISTRATION"
+  | "FOLLOW_UP_REQUIRED"
+  | "ADMINISTRATIVE_EXCEPTION";
+
+export type WorkQueueTaskType =
+  | "NEW_REFERRAL"
+  | "INTAKE_QUESTIONNAIRE"
+  | "INFORMANT_QUESTIONNAIRE"
+  | "INITIAL_ASSESSMENT"
+  | "FOLLOW_UP_ASSESSMENT"
+  | "TITRATION_REVIEW"
+  | "VITALS_CHECK"
+  | "PRESCRIPTION_ADMIN"
+  | "REPORT_WRITING"
+  | "ADMINISTRATIVE_TASK";
+
+export type WorkQueuePriority = "ROUTINE" | "URGENT" | "STAT";
+
+export type WorkQueueFilterView =
+  | "ALL"
+  | "MINE"
+  | "UNASSIGNED"
+  | "DUE_TODAY"
+  | "OVERDUE"
+  | "BLOCKED"
+  | "WAITING_FOR_PATIENT"
+  | "WAITING_FOR_CLINICIAN"
+  | "WAITING_FOR_ADMIN";
+
+export interface WorkQueueAction {
+  id: string;
+  label: string;
+  endpoint: string;
+  method: "POST" | "PATCH" | "PUT";
+  permission: string;
+  requiresConfirmation: boolean;
+}
+
+export interface WorkQueueItem {
+  id: string;
+  patientId: string;
+  displayName: string;
+  taskType: WorkQueueTaskType;
+  workflowStage: string;
+  status: WorkQueueStatus;
+  ownerId: string | null;
+  ownerDisplayName: string | null;
+  priority: WorkQueuePriority;
+  createdAt: string;
+  dueAt: string | null;
+  blockingReason: string | null;
+  nextPermittedActions: WorkQueueAction[];
+}
+
+export interface WorkQueueBucket {
+  id: string;
+  title: string;
+  statusFilter: WorkQueueStatus | null;
+  taskTypeFilter: WorkQueueTaskType | null;
+  count: number;
+}
+
+export interface PaginatedWorkQueueItems {
+  items: WorkQueueItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface WorkQueueActionRequest {
+  actionId: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface WorkQueueActionResponse {
+  itemId: string;
+  previousStatus: WorkQueueStatus;
+  newStatus: WorkQueueStatus;
+  auditEvent: string;
 }
 
 export interface SystemServiceStatus {
@@ -200,7 +283,35 @@ export const workstationApi = {
   getJourney: (patientId: string) =>
     api.get<ClinicalJourneyState>(`/workstation/patients/${patientId}/journey`),
 
-  getWorkQueue: () => api.get<WorkQueueSummary>("/workstation/queue"),
+  getQueueSummary: () => api.get<{ buckets: WorkQueueBucket[] }>("/workstation/queue/summary"),
+
+  getQueueItems: (params?: {
+    bucketId?: string;
+    filterView?: WorkQueueFilterView;
+    search?: string;
+    status?: WorkQueueStatus;
+    taskType?: WorkQueueTaskType;
+    owner?: string;
+    priority?: WorkQueuePriority;
+    page?: number;
+    pageSize?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.bucketId) qs.set("bucketId", params.bucketId);
+    if (params?.filterView) qs.set("filterView", params.filterView);
+    if (params?.search) qs.set("search", params.search);
+    if (params?.status) qs.set("status", params.status);
+    if (params?.taskType) qs.set("taskType", params.taskType);
+    if (params?.owner) qs.set("owner", params.owner);
+    if (params?.priority) qs.set("priority", params.priority);
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.pageSize) qs.set("pageSize", String(params.pageSize));
+    const path = qs.toString() ? `/workstation/queue/items?${qs.toString()}` : "/workstation/queue/items";
+    return api.get<PaginatedWorkQueueItems>(path);
+  },
+
+  performQueueAction: (itemId: string, actionId: string, payload?: Record<string, unknown>) =>
+    api.post<WorkQueueActionResponse>(`/workstation/queue/items/${itemId}/actions/${actionId}`, { actionId, ...(payload ? { payload } : {}) }),
 
   getSystemStatus: () => api.get<SystemStatusResponse>("/system/status"),
 };
