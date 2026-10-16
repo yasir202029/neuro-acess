@@ -28,9 +28,14 @@ export const clinicsTable = pgTable("clinics", {
 export const profilesTable = pgTable("profiles", {
   id: id("id"),
   fullName: text("full_name").notNull(),
-  email: text("email").notNull(),
+  // Nullable: slice-created profiles (clinical actors provisioned outside the
+  // email signup flow) have no email; auth signup always supplies one.
+  email: text("email"),
   role: text("role").notNull(),
   phone: text("phone"),
+  // Slice domain: display name + full role list (role keeps the primary role).
+  displayName: text("display_name"),
+  roles: jsonb("roles").$type<string[]>(),
   createdAt,
   updatedAt,
 });
@@ -83,13 +88,20 @@ export const appointmentsTable = pgTable("appointments", {
 });
 
 export const clinicalNotesTable = pgTable("clinical_notes", {
-  clinicId: text("clinic_id").notNull(),
+  // Nullable: slice assessment notes are not clinic-scoped.
+  clinicId: text("clinic_id"),
   id: id("id"),
   patientId: text("patient_id").notNull(),
   authorProfileId: text("author_profile_id").notNull(),
   noteType: text("note_type").notNull(),
   body: text("body").notNull(),
   occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+  // Slice linkage: which referral/draft produced this signed note, and its
+  // version chain (null for ordinary progress notes).
+  referralId: text("referral_id"),
+  draftId: text("draft_id"),
+  version: integer("version"),
+  signedAt: timestamp("signed_at", { withTimezone: true }),
   createdAt,
   updatedAt,
 });
@@ -191,6 +203,12 @@ export const auditLogsTable = pgTable("audit_logs", {
   resourceType: text("resource_type").notNull(),
   resourceId: text("resource_id"),
   metadata: jsonb("metadata"),
+  // Slice audit enrichment: category/severity/actor-roles/patient/time.
+  category: text("category"),
+  severity: text("severity"),
+  actorRoles: jsonb("actor_roles").$type<string[]>(),
+  patientId: text("patient_id"),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }),
   createdAt,
 });
 
@@ -219,6 +237,7 @@ export const journeyStatesTable = pgTable(
     patientId: text("patient_id").notNull(),
     stage: text("stage").notNull(),
     version: integer("version").notNull().default(0),
+    hasAssignedClinician: boolean("has_assigned_clinician").notNull().default(false),
     hasIntakeCompleted: boolean("has_intake_completed").notNull().default(false),
     createdAt,
     updatedAt,
@@ -253,6 +272,8 @@ export const timelineEventsTable = pgTable("timeline_events", {
   relatedType: text("related_type"),
   relatedId: text("related_id"),
   source: text("source").notNull(),
+  // Discriminated-union payload (noteId/outcome/amends/…) for lossless round-trip.
+  eventData: jsonb("event_data"),
   createdAt,
 });
 
@@ -296,8 +317,68 @@ export const aiDraftsTable = pgTable("ai_drafts", {
   safetyFindings: jsonb("safety_findings").notNull().default([]),
   version: integer("version").notNull().default(1),
   createdByProfileId: text("created_by_profile_id").notNull(),
+  signedNoteId: text("signed_note_id"),
   createdAt,
   updatedAt,
+});
+
+// --- Slice 1: task management (matches deployed slice_tasks table) ---
+
+export const sliceTasksTable = pgTable("slice_tasks", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull(),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  assigneeRole: text("assignee_role"),
+  status: text("status").notNull().default("OPEN"), // OPEN | DONE
+  createdAt,
+});
+
+// --- Slice 1: notifications (matches deployed notifications table) ---
+
+export const notificationsTable = pgTable("notifications", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull(),
+  audience: text("audience").notNull(),
+  channel: text("channel").notNull(),
+  template: text("template").notNull(),
+  createdAt,
+});
+
+// --- Slice 1: intake submissions (matches deployed intake_submissions table) ---
+
+export const intakeSubmissionsTable = pgTable("intake_submissions", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  referralId: text("referral_id").notNull(),
+  patientId: text("patient_id").notNull(),
+  answers: jsonb("answers").notNull().default({}),
+  questionnaireScores: jsonb("questionnaire_scores").notNull().default([]),
+  documentKinds: jsonb("document_kinds").notNull().default([]),
+  submittedAt: timestamp("submitted_at", { withTimezone: true }).notNull(),
+  createdAt,
+});
+
+// --- Slice 1: consultation state (matches deployed consultation_states table) ---
+
+export const consultationStatesTable = pgTable("consultation_states", {
+  clinicId: text("clinic_id"),
+  referralId: text("referral_id").notNull().unique(),
+  state: text("state").notNull(),
+  updatedAt,
+});
+
+// --- Slice 1: transcript bookmarks (matches deployed bookmarks table) ---
+
+export const bookmarksTable = pgTable("bookmarks", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  referralId: text("referral_id").notNull(),
+  segmentId: text("segment_id").notNull(),
+  label: text("label").notNull(),
+  createdAt,
 });
 
 export const insertClinicSchema = createInsertSchema(clinicsTable).omit({ createdAt: true, updatedAt: true });

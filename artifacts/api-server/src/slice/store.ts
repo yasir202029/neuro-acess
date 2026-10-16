@@ -1,10 +1,15 @@
 /**
  * SliceStore — the single persistence seam for the slice.
  *
- * `InMemorySliceStore` is the synthetic development/test implementation
- * (single process, resets on restart). The Drizzle/Postgres implementation
- * targets the same interface and migration 0009 (gap register — not yet
- * wired because no database is reachable in this environment).
+ * Every operation is async so service code is store-agnostic:
+ * - `InMemorySliceStore` — synthetic development/test implementation
+ *   (single process, resets on restart; never production authority).
+ * - `DrizzleSliceStore` (./drizzle-store) — PostgreSQL-backed implementation
+ *   over migration 0009/0010 tables.
+ *
+ * `getProductionSliceStore()` selects the persistent store when DATABASE_URL
+ * is configured and refuses to fall back to memory in production
+ * (deny-by-default: no silent data loss).
  */
 import { randomUUID } from "node:crypto";
 import type { JourneyFacts } from "@neurocare/journey";
@@ -31,25 +36,25 @@ import {
 
 export interface SliceStore {
   // Profiles / patients
-  getProfile(id: string): ProfileRecord | undefined;
-  upsertProfile(profile: ProfileRecord): void;
-  findPatientByProfile(profileId: string): PatientRecord | undefined;
-  createPatient(record: PatientRecord): PatientRecord;
-  getPatient(id: string): PatientRecord | undefined;
+  getProfile(id: string): Promise<ProfileRecord | undefined>;
+  upsertProfile(profile: ProfileRecord): Promise<void>;
+  findPatientByProfile(profileId: string): Promise<PatientRecord | undefined>;
+  createPatient(record: PatientRecord): Promise<PatientRecord>;
+  getPatient(id: string): Promise<PatientRecord | undefined>;
 
   // Referrals
-  createReferral(referral: Referral): Referral;
-  getReferral(id: string): Referral | undefined;
-  listReferrals(): Referral[];
-  updateReferral(id: string, patch: Partial<Omit<Referral, "id">>): Referral;
+  createReferral(referral: Referral): Promise<Referral>;
+  getReferral(id: string): Promise<Referral | undefined>;
+  listReferrals(): Promise<Referral[]>;
+  updateReferral(id: string, patch: Partial<Omit<Referral, "id">>): Promise<Referral>;
 
   // Journey
-  createJourney(patientId: string): JourneySnapshot;
-  getJourney(patientId: string): JourneySnapshot | undefined;
+  createJourney(patientId: string): Promise<JourneySnapshot>;
+  getJourney(patientId: string): Promise<JourneySnapshot | undefined>;
   updateJourney(
     patientId: string,
     patch: Partial<Pick<JourneySnapshot, "stage" | "version" | "hasAssignedClinician" | "hasIntakeCompleted">>,
-  ): JourneySnapshot;
+  ): Promise<JourneySnapshot>;
   recordTransition(input: {
     patientId: string;
     fromStage: string | null;
@@ -57,40 +62,40 @@ export interface SliceStore {
     command: string;
     actorId: string;
     reason?: string;
-  }): void;
-  listTransitions(patientId: string): StoredTransition[];
+  }): Promise<void>;
+  listTransitions(patientId: string): Promise<StoredTransition[]>;
 
   // Intake
-  saveIntake(intake: IntakeSubmission): IntakeSubmission;
-  getIntake(referralId: string): IntakeSubmission | undefined;
+  saveIntake(intake: IntakeSubmission): Promise<IntakeSubmission>;
+  getIntake(referralId: string): Promise<IntakeSubmission | undefined>;
 
   // Consultation (consent, transcript, bookmarks, state)
-  createConsent(consent: ConsentRecord): ConsentRecord;
-  getActiveConsent(referralId: string): ConsentRecord | undefined;
-  addSegments(referralId: string, segments: readonly TranscriptSegment[]): void;
-  listSegments(referralId: string): TranscriptSegment[];
-  addBookmark(referralId: string, bookmark: Bookmark): Bookmark;
-  listBookmarks(referralId: string): Bookmark[];
-  getConsultationState(referralId: string): ConsultationState;
-  setConsultationState(referralId: string, state: ConsultationState): void;
+  createConsent(consent: ConsentRecord): Promise<ConsentRecord>;
+  getActiveConsent(referralId: string): Promise<ConsentRecord | undefined>;
+  addSegments(referralId: string, segments: readonly TranscriptSegment[]): Promise<void>;
+  listSegments(referralId: string): Promise<TranscriptSegment[]>;
+  addBookmark(referralId: string, bookmark: Bookmark): Promise<Bookmark>;
+  listBookmarks(referralId: string): Promise<Bookmark[]>;
+  getConsultationState(referralId: string): Promise<ConsultationState>;
+  setConsultationState(referralId: string, state: ConsultationState): Promise<void>;
 
   // Drafts / notes
-  createDraft(draft: AiDraft): AiDraft;
-  getDraft(id: string): AiDraft | undefined;
-  updateDraft(id: string, patch: Partial<AiDraft>): AiDraft;
-  createNote(note: ClinicalNote): ClinicalNote;
-  getSignedNote(referralId: string): ClinicalNote | undefined;
+  createDraft(draft: AiDraft): Promise<AiDraft>;
+  getDraft(id: string): Promise<AiDraft | undefined>;
+  updateDraft(id: string, patch: Partial<AiDraft>): Promise<AiDraft>;
+  createNote(note: ClinicalNote): Promise<ClinicalNote>;
+  getSignedNote(referralId: string): Promise<ClinicalNote | undefined>;
 
   // Effects
-  createTasks(tasks: readonly SliceTask[]): void;
-  listOpenTasks(patientId: string): SliceTask[];
-  completeTasks(patientId: string, types: readonly string[]): void;
-  appendTimeline(event: TimelineEvent): void;
-  listTimeline(patientId: string): TimelineEvent[];
-  appendAudit(event: AuditEvent): void;
-  listAudit(): AuditEvent[];
-  enqueueNotification(record: NotificationRecord): void;
-  listNotifications(patientId: string): NotificationRecord[];
+  createTasks(tasks: readonly SliceTask[]): Promise<void>;
+  listOpenTasks(patientId: string): Promise<SliceTask[]>;
+  completeTasks(patientId: string, types: readonly string[]): Promise<void>;
+  appendTimeline(event: TimelineEvent): Promise<void>;
+  listTimeline(patientId: string): Promise<TimelineEvent[]>;
+  appendAudit(event: AuditEvent): Promise<void>;
+  listAudit(): Promise<AuditEvent[]>;
+  enqueueNotification(record: NotificationRecord): Promise<void>;
+  listNotifications(patientId: string): Promise<NotificationRecord[]>;
 }
 export class InMemorySliceStore implements SliceStore {
   private readonly profiles = new Map<string, ProfileRecord>();
@@ -112,23 +117,23 @@ export class InMemorySliceStore implements SliceStore {
   private readonly audit: AuditEvent[] = [];
   private readonly notifications: NotificationRecord[] = [];
 
-  getProfile(id: string) { return this.profiles.get(id); }
-  upsertProfile(profile: ProfileRecord) { this.profiles.set(profile.id, profile); }
-  findPatientByProfile(profileId: string) {
+  async getProfile(id: string) { return this.profiles.get(id); }
+  async upsertProfile(profile: ProfileRecord) { this.profiles.set(profile.id, profile); }
+  async findPatientByProfile(profileId: string) {
     const id = this.patientsByProfile.get(profileId);
     return id ? this.patients.get(id) : undefined;
   }
-  createPatient(record: PatientRecord) {
+  async createPatient(record: PatientRecord) {
     this.patients.set(record.id, record);
     this.patientsByProfile.set(record.profileId, record.id);
     return record;
   }
-  getPatient(id: string) { return this.patients.get(id); }
+  async getPatient(id: string) { return this.patients.get(id); }
 
-  createReferral(referral: Referral) { this.referrals.set(referral.id, referral); return referral; }
-  getReferral(id: string) { return this.referrals.get(id); }
-  listReferrals() { return [...this.referrals.values()]; }
-  updateReferral(id: string, patch: Partial<Omit<Referral, "id">>) {
+  async createReferral(referral: Referral) { this.referrals.set(referral.id, referral); return referral; }
+  async getReferral(id: string) { return this.referrals.get(id); }
+  async listReferrals() { return [...this.referrals.values()]; }
+  async updateReferral(id: string, patch: Partial<Omit<Referral, "id">>) {
     const current = this.referrals.get(id);
     if (!current) throw new SliceError(404, "NOT_FOUND", "Referral not found.");
     const next = { ...current, ...patch };
@@ -136,7 +141,7 @@ export class InMemorySliceStore implements SliceStore {
     return next;
   }
 
-  createJourney(patientId: string) {
+  async createJourney(patientId: string) {
     const snapshot: JourneySnapshot = {
       patientId,
       stage: "LEAD",
@@ -147,8 +152,8 @@ export class InMemorySliceStore implements SliceStore {
     this.journeys.set(patientId, snapshot);
     return snapshot;
   }
-  getJourney(patientId: string) { return this.journeys.get(patientId); }
-  updateJourney(
+  async getJourney(patientId: string) { return this.journeys.get(patientId); }
+  async updateJourney(
     patientId: string,
     patch: Partial<Pick<JourneySnapshot, "stage" | "version" | "hasAssignedClinician" | "hasIntakeCompleted">>,
   ) {
@@ -158,7 +163,7 @@ export class InMemorySliceStore implements SliceStore {
     this.journeys.set(patientId, next);
     return next;
   }
-  recordTransition(input: {
+  async recordTransition(input: {
     patientId: string;
     fromStage: string | null;
     toStage: string;
@@ -168,64 +173,64 @@ export class InMemorySliceStore implements SliceStore {
   }) {
     this.transitions.push({ id: randomUUID(), createdAt: new Date().toISOString(), ...input });
   }
-  listTransitions(patientId: string) {
+  async listTransitions(patientId: string) {
     return this.transitions.filter((transition) => transition.patientId === patientId);
   }
 
-  saveIntake(intake: IntakeSubmission) { this.intakes.set(intake.referralId, intake); return intake; }
-  getIntake(referralId: string) { return this.intakes.get(referralId); }
-  createConsent(consent: ConsentRecord) {
+  async saveIntake(intake: IntakeSubmission) { this.intakes.set(intake.referralId, intake); return intake; }
+  async getIntake(referralId: string) { return this.intakes.get(referralId); }
+  async createConsent(consent: ConsentRecord) {
     const list = this.consents.get(consent.referralId) ?? [];
     list.push(consent);
     this.consents.set(consent.referralId, list);
     return consent;
   }
-  getActiveConsent(referralId: string) {
+  async getActiveConsent(referralId: string) {
     return this.consents.get(referralId)?.find((consent) => !consent.withdrawnAt);
   }
-  addSegments(referralId: string, segments: readonly TranscriptSegment[]) {
+  async addSegments(referralId: string, segments: readonly TranscriptSegment[]) {
     const list = this.segments.get(referralId) ?? [];
     this.segments.set(referralId, [...list, ...segments]);
   }
-  listSegments(referralId: string) { return this.segments.get(referralId) ?? []; }
-  addBookmark(referralId: string, bookmark: Bookmark) {
+  async listSegments(referralId: string) { return this.segments.get(referralId) ?? []; }
+  async addBookmark(referralId: string, bookmark: Bookmark) {
     const list = this.bookmarks.get(referralId) ?? [];
     list.push(bookmark);
     this.bookmarks.set(referralId, list);
     return bookmark;
   }
-  listBookmarks(referralId: string) { return this.bookmarks.get(referralId) ?? []; }
-  getConsultationState(referralId: string) {
+  async listBookmarks(referralId: string) { return this.bookmarks.get(referralId) ?? []; }
+  async getConsultationState(referralId: string) {
     return this.consultationStates.get(referralId) ?? "NOT_STARTED";
   }
-  setConsultationState(referralId: string, state: ConsultationState) {
+  async setConsultationState(referralId: string, state: ConsultationState) {
     this.consultationStates.set(referralId, state);
   }
 
-  createDraft(draft: AiDraft) { this.drafts.set(draft.id, draft); return draft; }
-  getDraft(id: string) { return this.drafts.get(id); }
-  updateDraft(id: string, patch: Partial<AiDraft>) {
+  async createDraft(draft: AiDraft) { this.drafts.set(draft.id, draft); return draft; }
+  async getDraft(id: string) { return this.drafts.get(id); }
+  async updateDraft(id: string, patch: Partial<AiDraft>) {
     const current = this.drafts.get(id);
     if (!current) throw new SliceError(404, "NOT_FOUND", "Draft not found.");
     const next = { ...current, ...patch };
     this.drafts.set(id, next);
     return next;
   }
-  createNote(note: ClinicalNote) {
+  async createNote(note: ClinicalNote) {
     this.notes.set(note.id, note);
     this.notesByReferral.set(note.referralId, note.id);
     return note;
   }
-  getSignedNote(referralId: string) {
+  async getSignedNote(referralId: string) {
     const id = this.notesByReferral.get(referralId);
     return id ? this.notes.get(id) : undefined;
   }
 
-  createTasks(tasks: readonly SliceTask[]) { this.tasks.push(...tasks); }
-  listOpenTasks(patientId: string) {
+  async createTasks(tasks: readonly SliceTask[]) { this.tasks.push(...tasks); }
+  async listOpenTasks(patientId: string) {
     return this.tasks.filter((task) => task.patientId === patientId && task.status === "OPEN");
   }
-  completeTasks(patientId: string, types: readonly string[]) {
+  async completeTasks(patientId: string, types: readonly string[]) {
     for (let i = 0; i < this.tasks.length; i += 1) {
       const task = this.tasks[i];
       if (task && task.patientId === patientId && task.status === "OPEN" && types.includes(task.type)) {
@@ -233,16 +238,16 @@ export class InMemorySliceStore implements SliceStore {
       }
     }
   }
-  appendTimeline(event: TimelineEvent) { this.timeline.push(event); }
-  listTimeline(patientId: string) {
+  async appendTimeline(event: TimelineEvent) { this.timeline.push(event); }
+  async listTimeline(patientId: string) {
     return this.timeline.filter(
       (event) => event.relatedEntity?.id === patientId || event.id.startsWith(`${patientId}:`),
     );
   }
-  appendAudit(event: AuditEvent) { this.audit.push(event); }
-  listAudit() { return [...this.audit]; }
-  enqueueNotification(record: NotificationRecord) { this.notifications.push(record); }
-  listNotifications(patientId: string) {
+  async appendAudit(event: AuditEvent) { this.audit.push(event); }
+  async listAudit() { return [...this.audit]; }
+  async enqueueNotification(record: NotificationRecord) { this.notifications.push(record); }
+  async listNotifications(patientId: string) {
     return this.notifications.filter((record) => record.patientId === patientId);
   }
 }
@@ -257,18 +262,18 @@ export class InMemorySliceStore implements SliceStore {
 export function createWorkflowPorts(store: SliceStore): WorkflowPorts {
   return {
     async loadFacts(patientId: string): Promise<JourneyFacts> {
-      const journey = store.getJourney(patientId);
+      const journey = await store.getJourney(patientId);
       if (!journey) throw new SliceError(404, "NOT_FOUND", "Journey not found.");
       return {
         currentStage: journey.stage,
         hasAssignedClinician: journey.hasAssignedClinician,
         hasIntakeCompleted: journey.hasIntakeCompleted,
-        openTaskTypes: [...new Set(store.listOpenTasks(patientId).map((task) => task.type))],
+        openTaskTypes: [...new Set((await store.listOpenTasks(patientId)).map((task) => task.type))],
         version: journey.version,
       };
     },
     async applyStage(input) {
-      const journey = store.getJourney(input.patientId);
+      const journey = await store.getJourney(input.patientId);
       if (!journey) throw new SliceError(404, "NOT_FOUND", "Journey not found.");
       if (journey.version !== input.expectedVersion) {
         throw new SliceError(409, "VERSION_CONFLICT", "The record changed; reload and retry.", {
@@ -276,15 +281,15 @@ export function createWorkflowPorts(store: SliceStore): WorkflowPorts {
           actualVersion: journey.version,
         });
       }
-      store.updateJourney(input.patientId, {
+      await store.updateJourney(input.patientId, {
         stage: input.toStage,
         version: input.expectedVersion + 1,
       });
       return { version: input.expectedVersion + 1 };
     },
-    async recordTransition(input) { store.recordTransition(input); },
+    async recordTransition(input) { await store.recordTransition(input); },
     async createTasks({ patientId, tasks }) {
-      store.createTasks(
+      await store.createTasks(
         tasks.map((task) => ({
           id: `${patientId}:${task.type}:${task.title}`,
           patientId,
@@ -298,7 +303,7 @@ export function createWorkflowPorts(store: SliceStore): WorkflowPorts {
     },
     async enqueueNotifications({ patientId, notifications }) {
       for (const notification of notifications) {
-        store.enqueueNotification({
+        await store.enqueueNotification({
           id: `${patientId}:${notification.template}:${Date.now()}:${Math.random()}`,
           patientId,
           audience: notification.audience,
@@ -308,16 +313,111 @@ export function createWorkflowPorts(store: SliceStore): WorkflowPorts {
         });
       }
     },
-    async writeAudit(event) { store.appendAudit(event); },
-    async emitDomainEvent(event) { store.appendTimeline(event); },
+    async writeAudit(event) { await store.appendAudit(event); },
+    async emitDomainEvent(event) { await store.appendTimeline(event); },
   };
 }
 
-/** Process-wide store for the running server; tests build fresh instances. */
+/** Process-wide dev/test store; tests build fresh instances. */
 let serverStore: InMemorySliceStore | undefined;
 export function getSliceStore(): InMemorySliceStore {
   serverStore ??= new InMemorySliceStore();
   return serverStore;
+}
+
+/**
+ * Production authority selection (deny-by-default):
+ * - DATABASE_URL configured → Drizzle/PostgreSQL store (authoritative).
+ * - Production without DATABASE_URL → refuse to start (never silently run
+ *   clinical workflows against volatile memory).
+ * - Development without DATABASE_URL → in-memory store, clearly degraded.
+ *
+ * The Drizzle module is imported lazily so unit tests (and dev runs without
+ * a database) never load `@workspace/db`, whose module init requires
+ * DATABASE_URL.
+ */
+export async function getProductionSliceStore(): Promise<SliceStore> {
+  if (process.env.DATABASE_URL) {
+    const { drizzleStore } = await import("./drizzle-store");
+    return drizzleStore;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "DATABASE_URL is required in production: the clinical record cannot be served from volatile memory.",
+    );
+  }
+  return getSliceStore();
+}
+
+/**
+ * Store facade that defers the async store construction to the first
+ * operation. All SliceStore operations are async, so callers cannot observe
+ * the indirection; the router can stay synchronously constructible while
+ * production authority is still selected by environment.
+ */
+export function createLazySliceStore(
+  load: () => Promise<SliceStore>,
+): SliceStore {
+  let resolved: Promise<SliceStore> | undefined;
+  const inner = () => (resolved ??= load());
+  return {
+    getProfile: async (id) => (await inner()).getProfile(id),
+    upsertProfile: async (profile) => (await inner()).upsertProfile(profile),
+    findPatientByProfile: async (profileId) =>
+      (await inner()).findPatientByProfile(profileId),
+    createPatient: async (record) => (await inner()).createPatient(record),
+    getPatient: async (id) => (await inner()).getPatient(id),
+    createReferral: async (referral) => (await inner()).createReferral(referral),
+    getReferral: async (id) => (await inner()).getReferral(id),
+    listReferrals: async () => (await inner()).listReferrals(),
+    updateReferral: async (id, patch) =>
+      (await inner()).updateReferral(id, patch),
+    createJourney: async (patientId) =>
+      (await inner()).createJourney(patientId),
+    getJourney: async (patientId) => (await inner()).getJourney(patientId),
+    updateJourney: async (patientId, patch) =>
+      (await inner()).updateJourney(patientId, patch),
+    recordTransition: async (input) =>
+      (await inner()).recordTransition(input),
+    listTransitions: async (patientId) =>
+      (await inner()).listTransitions(patientId),
+    saveIntake: async (intake) => (await inner()).saveIntake(intake),
+    getIntake: async (referralId) => (await inner()).getIntake(referralId),
+    createConsent: async (consent) => (await inner()).createConsent(consent),
+    getActiveConsent: async (referralId) =>
+      (await inner()).getActiveConsent(referralId),
+    addSegments: async (referralId, segments) =>
+      (await inner()).addSegments(referralId, segments),
+    listSegments: async (referralId) =>
+      (await inner()).listSegments(referralId),
+    addBookmark: async (referralId, bookmark) =>
+      (await inner()).addBookmark(referralId, bookmark),
+    listBookmarks: async (referralId) =>
+      (await inner()).listBookmarks(referralId),
+    getConsultationState: async (referralId) =>
+      (await inner()).getConsultationState(referralId),
+    setConsultationState: async (referralId, state) =>
+      (await inner()).setConsultationState(referralId, state),
+    createDraft: async (draft) => (await inner()).createDraft(draft),
+    getDraft: async (id) => (await inner()).getDraft(id),
+    updateDraft: async (id, patch) => (await inner()).updateDraft(id, patch),
+    createNote: async (note) => (await inner()).createNote(note),
+    getSignedNote: async (referralId) =>
+      (await inner()).getSignedNote(referralId),
+    createTasks: async (tasks) => (await inner()).createTasks(tasks),
+    listOpenTasks: async (patientId) =>
+      (await inner()).listOpenTasks(patientId),
+    completeTasks: async (patientId, types) =>
+      (await inner()).completeTasks(patientId, types),
+    appendTimeline: async (event) => (await inner()).appendTimeline(event),
+    listTimeline: async (patientId) => (await inner()).listTimeline(patientId),
+    appendAudit: async (event) => (await inner()).appendAudit(event),
+    listAudit: async () => (await inner()).listAudit(),
+    enqueueNotification: async (record) =>
+      (await inner()).enqueueNotification(record),
+    listNotifications: async (patientId) =>
+      (await inner()).listNotifications(patientId),
+  };
 }
 
 

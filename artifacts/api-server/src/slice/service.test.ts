@@ -11,19 +11,19 @@ const PATIENT: SliceActor = { actorId: "patient-1", roles: ["PATIENT"] };
 const ADMIN: SliceActor = { actorId: "admin-1", roles: ["ADMIN"] };
 const CLINICIAN: SliceActor = { actorId: "clinician-1", roles: ["CLINICIAN"] };
 
-function setup() {
+async function setup() {
   const store = new InMemorySliceStore();
-  store.upsertProfile({
+  await store.upsertProfile({
     id: PATIENT.actorId,
     displayName: "P",
     roles: ["PATIENT"],
   });
-  store.upsertProfile({
+  await store.upsertProfile({
     id: ADMIN.actorId,
     displayName: "A",
     roles: ["ADMIN"],
   });
-  store.upsertProfile({
+  await store.upsertProfile({
     id: CLINICIAN.actorId,
     displayName: "C",
     roles: ["CLINICIAN"],
@@ -51,7 +51,7 @@ async function request(service: SliceService) {
 
 describe("slice service — referral lifecycle", () => {
   it("runs referral to assessment with audit and timeline", async () => {
-    const { store, service } = setup();
+    const { store, service } = await setup();
     const { referral, journey } = await request(service);
     expect(journey.stage).toBe("LEAD");
     await expect(request(service)).rejects.toMatchObject({
@@ -73,21 +73,22 @@ describe("slice service — referral lifecycle", () => {
     ).rejects.toMatchObject({ status: 400, code: "UNKNOWN_CLINICIAN" });
     const opened = await service.startIntake(CLINICIAN, referral.id);
     expect(opened.stage).toBe("INTAKE");
-    service.submitIntake(PATIENT, referral.id, INTAKE);
+    await service.submitIntake(PATIENT, referral.id, INTAKE);
     const assessing = await service.startAssessment(CLINICIAN, referral.id);
     expect(assessing.stage).toBe("ASSESSMENT");
     expect(
-      store.listTransitions(referral.patientId).length,
+      (await store.listTransitions(referral.patientId)).length,
     ).toBeGreaterThanOrEqual(5);
+    const status = await service.getPatientStatus(PATIENT, referral.patientId);
+    expect(status.plainStatus.length).toBeGreaterThan(0);
+    expect((await store.listAudit()).length).toBeGreaterThan(0);
     expect(
-      service.getPatientStatus(PATIENT, referral.patientId).plainStatus.length,
+      (await store.listTimeline(referral.patientId)).length,
     ).toBeGreaterThan(0);
-    expect(store.listAudit().length).toBeGreaterThan(0);
-    expect(store.listTimeline(referral.patientId).length).toBeGreaterThan(0);
   });
 
   it("blocks START_ASSESSMENT until intake is completed", async () => {
-    const { service } = setup();
+    const { service } = await setup();
     const { referral } = await request(service);
     await service.bookFirstAppointment(ADMIN, referral.id, {
       scheduledFor: "2026-11-01T10:00:00Z",
@@ -102,24 +103,24 @@ describe("slice service — referral lifecycle", () => {
 
 describe("slice service — isolation and permissions", () => {
   it("enforces own-record access and cross-patient isolation", async () => {
-    const { store, service } = setup();
+    const { store, service } = await setup();
     const other: SliceActor = { actorId: "patient-2", roles: ["PATIENT"] };
-    store.upsertProfile({
+    await store.upsertProfile({
       id: other.actorId,
       displayName: "Other",
       roles: ["PATIENT"],
     });
     const { referral } = await request(service);
     await expect(
-      (async () => service.submitIntake(other, referral.id, INTAKE))(),
+      service.submitIntake(other, referral.id, INTAKE),
     ).rejects.toMatchObject({ status: 403, code: "CROSS_PATIENT_DENIED" });
-    expect(() =>
+    await expect(
       service.getPatientStatus(other, referral.patientId),
-    ).toThrowError(SliceError);
+    ).rejects.toThrowError(SliceError);
   });
 
   it("denies actions without the capability", async () => {
-    const { store, service } = setup();
+    const { store, service } = await setup();
     const { referral } = await request(service);
     // Per the permission matrix, patients may book their OWN appointment
     // (appointment:manage + ownership) but cannot triage, start intake, or draft.
@@ -130,7 +131,7 @@ describe("slice service — isolation and permissions", () => {
     );
     expect(ownBooking.stage).toBe("BOOKED");
     const other: SliceActor = { actorId: "patient-2", roles: ["PATIENT"] };
-    store.upsertProfile({
+    await store.upsertProfile({
       id: other.actorId,
       displayName: "Other",
       roles: ["PATIENT"],
@@ -176,54 +177,57 @@ async function toAssessment(service: SliceService) {
   });
   await service.assignClinician(ADMIN, referral.id, CLINICIAN.actorId);
   await service.startIntake(CLINICIAN, referral.id);
-  service.submitIntake(PATIENT, referral.id, INTAKE);
+  await service.submitIntake(PATIENT, referral.id, INTAKE);
   await service.startAssessment(CLINICIAN, referral.id);
   return referral;
 }
 
 describe("slice service — consultation and AI gating", () => {
   it("requires consent before transcript and draft", async () => {
-    const { service } = setup();
+    const { service } = await setup();
     const referral = await toAssessment(service);
     await expect(
-      (async () =>
-        service.ingestTranscript(CLINICIAN, referral.id, SEGMENTS))(),
+      service.ingestTranscript(CLINICIAN, referral.id, SEGMENTS),
     ).rejects.toMatchObject({ status: 409, code: "CONSENT_MISSING" });
     await expect(
-      (async () => service.generateDraft(CLINICIAN, referral.id))(),
+      service.generateDraft(CLINICIAN, referral.id),
     ).rejects.toMatchObject({ status: 409, code: "CONSENT_MISSING" });
-    const consent = service.recordConsent(CLINICIAN, referral.id, {
+    const consent = await service.recordConsent(CLINICIAN, referral.id, {
       wordingVersion: "v1",
       purpose: "Consultation recording and AI-assisted drafting",
       consentingParty: "PATIENT",
     });
     expect(consent.wordingVersion).toBe("v1");
     await expect(
-      (async () =>
-        service.recordConsent(CLINICIAN, referral.id, {
-          wordingVersion: "v1",
-          purpose: "Again",
-          consentingParty: "PATIENT",
-        }))(),
+      service.recordConsent(CLINICIAN, referral.id, {
+        wordingVersion: "v1",
+        purpose: "Again",
+        consentingParty: "PATIENT",
+      }),
     ).rejects.toMatchObject({ status: 409, code: "CONSENT_EXISTS" });
   });
 
   it("blocks approval while unsupported statements or conflicts remain", async () => {
-    const { service } = setup();
+    const { service } = await setup();
     const referral = await toAssessment(service);
-    service.recordConsent(CLINICIAN, referral.id, {
+    await service.recordConsent(CLINICIAN, referral.id, {
       wordingVersion: "v1",
       purpose: "Recording and drafting",
       consentingParty: "PATIENT",
     });
-    service.ingestTranscript(CLINICIAN, referral.id, SEGMENTS);
-    const draft = service.generateDraft(CLINICIAN, referral.id);
+    await service.ingestTranscript(CLINICIAN, referral.id, SEGMENTS);
+    const draft = await service.generateDraft(CLINICIAN, referral.id);
     expect(draft.status).toBe("AI_DRAFT_REQUIRES_CLINICIAN_REVIEW");
     expect(draft.missingInformation.length).toBeGreaterThan(0);
     for (const conflict of draft.conflicts) {
-      service.resolveConflict(CLINICIAN, draft.id, conflict.id, "RESOLVED");
+      await service.resolveConflict(
+        CLINICIAN,
+        draft.id,
+        conflict.id,
+        "RESOLVED",
+      );
     }
-    const { noteId } = service.approveDraft(CLINICIAN, draft.id);
+    const { noteId } = await service.approveDraft(CLINICIAN, draft.id);
     expect(noteId.length).toBeGreaterThan(0);
     await expect(
       service.recordOutcome(CLINICIAN, referral.id, { outcome: "CONFIRMED" }),
@@ -231,7 +235,7 @@ describe("slice service — consultation and AI gating", () => {
   });
 
   it("requires a signed note before recording the outcome", async () => {
-    const { service } = setup();
+    const { service } = await setup();
     const referral = await toAssessment(service);
     await expect(
       service.recordOutcome(CLINICIAN, referral.id, { outcome: "CONFIRMED" }),

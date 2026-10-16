@@ -15,7 +15,11 @@ import { SliceService } from "../slice/service";
 import { SliceError } from "../slice/types";
 import { requirePermission } from "../security/auth";
 import { requireFlag } from "../security/flags";
-import { InMemorySliceStore, getSliceStore } from "../slice/store";
+import {
+  createLazySliceStore,
+  getProductionSliceStore,
+  InMemorySliceStore,
+} from "../slice/store";
 
 const PATHWAYS = new Set(["ADHD", "AUTISM", "BOTH"]);
 const REFERRAL_SOURCES = new Set(["SELF", "GP", "OTHER"]);
@@ -136,7 +140,7 @@ export function createSliceRouter(service: SliceService): IRouter {
           .json({ error: "Validation note must be at most 2000 characters." });
       }
       const trim = typeof body.note === "string" ? body.note.trim() : "";
-      const referral = service.validateReferral(
+      const referral = await service.validateReferral(
         actorOf(req),
         paramOf(req, "id"),
         {
@@ -155,7 +159,7 @@ export function createSliceRouter(service: SliceService): IRouter {
     requireFlag("referralWorkflow"),
     asyncRoute(async (req, res) => {
       const assignedOnly = req.user!.role === "CLINICIAN";
-      const result = service.listReferrals(actorOf(req));
+      const result = await service.listReferrals(actorOf(req));
       const filtered = assignedOnly
         ? result.filter(
             (entry) =>
@@ -227,7 +231,7 @@ export function createSliceRouter(service: SliceService): IRouter {
             error: "A note describing the missing information is required.",
           });
       }
-      const referral = service.validateReferral(
+      const referral = await service.validateReferral(
         actorOf(req),
         paramOf(req, "id"),
         {
@@ -307,25 +311,29 @@ export function createSliceRouter(service: SliceService): IRouter {
           .json({ error: "Document kinds must be a list of labels." });
       const edu = answers.educationSupport as string | undefined;
       const phys = answers.physicalHealth as string | undefined;
-      const intake = service.submitIntake(actorOf(req), paramOf(req, "id"), {
-        answers: {
-          currentDifficulties: (answers.currentDifficulties as string).trim(),
-          childhoodDifficulties: childhood as "YES" | "NO" | "UNCLEAR",
-          ...(typeof edu === "string" && edu.trim().length > 0
-            ? { educationSupport: edu.trim() }
-            : {}),
-          ...(typeof phys === "string" && phys.trim().length > 0
-            ? { physicalHealth: phys.trim() }
-            : {}),
+      const intake = await service.submitIntake(
+        actorOf(req),
+        paramOf(req, "id"),
+        {
+          answers: {
+            currentDifficulties: (answers.currentDifficulties as string).trim(),
+            childhoodDifficulties: childhood as "YES" | "NO" | "UNCLEAR",
+            ...(typeof edu === "string" && edu.trim().length > 0
+              ? { educationSupport: edu.trim() }
+              : {}),
+            ...(typeof phys === "string" && phys.trim().length > 0
+              ? { physicalHealth: phys.trim() }
+              : {}),
+          },
+          questionnaireScores: (
+            scores as { instrument: string; score: number }[]
+          ).map((e) => ({
+            instrument: e.instrument.trim(),
+            score: e.score,
+          })),
+          documentKinds: (kinds as string[]).map((k) => k.trim()),
         },
-        questionnaireScores: (
-          scores as { instrument: string; score: number }[]
-        ).map((e) => ({
-          instrument: e.instrument.trim(),
-          score: e.score,
-        })),
-        documentKinds: (kinds as string[]).map((k) => k.trim()),
-      });
+      );
       return res.status(200).json({ intake });
     }),
   );
@@ -369,12 +377,16 @@ export function createSliceRouter(service: SliceService): IRouter {
       }
       const restr =
         typeof body.restrictions === "string" ? body.restrictions.trim() : "";
-      const consent = service.recordConsent(actorOf(req), paramOf(req, "id"), {
-        wordingVersion: (body.wordingVersion as string).trim(),
-        purpose: (body.purpose as string).trim(),
-        consentingParty: body.consentingParty as "PATIENT" | "PROXY",
-        restrictions: restr.length > 0 ? restr : undefined,
-      });
+      const consent = await service.recordConsent(
+        actorOf(req),
+        paramOf(req, "id"),
+        {
+          wordingVersion: (body.wordingVersion as string).trim(),
+          purpose: (body.purpose as string).trim(),
+          consentingParty: body.consentingParty as "PATIENT" | "PROXY",
+          restrictions: restr.length > 0 ? restr : undefined,
+        },
+      );
       return res.status(201).json({ consent });
     }),
   );
@@ -424,7 +436,7 @@ export function createSliceRouter(service: SliceService): IRouter {
           excluded: false,
         });
       }
-      const result = service.ingestTranscript(
+      const result = await service.ingestTranscript(
         actorOf(req),
         paramOf(req, "id"),
         cleaned,
@@ -448,10 +460,14 @@ export function createSliceRouter(service: SliceService): IRouter {
           .status(400)
           .json({ error: "A segment identifier and label are required." });
       }
-      const bookmark = service.addBookmark(actorOf(req), paramOf(req, "id"), {
-        segmentId: (body.segmentId as string).trim(),
-        label: (body.label as string).trim(),
-      });
+      const bookmark = await service.addBookmark(
+        actorOf(req),
+        paramOf(req, "id"),
+        {
+          segmentId: (body.segmentId as string).trim(),
+          label: (body.label as string).trim(),
+        },
+      );
       return res.status(201).json({ bookmark });
     }),
   );
@@ -462,7 +478,7 @@ export function createSliceRouter(service: SliceService): IRouter {
     requirePermission("ai:use"),
     requireFlag("clinicalAiEnabled", "clinicalNoteDrafting"),
     asyncRoute(async (req, res) => {
-      const draft = service.generateDraft(actorOf(req), paramOf(req, "id"));
+      const draft = await service.generateDraft(actorOf(req), paramOf(req, "id"));
       return res.status(201).json({ draft });
     }),
   );
@@ -494,7 +510,11 @@ export function createSliceRouter(service: SliceService): IRouter {
           text: (item.text as string).trim(),
         });
       }
-      const draft = service.amendDraft(actorOf(req), paramOf(req, "id"), edits);
+      const draft = await service.amendDraft(
+        actorOf(req),
+        paramOf(req, "id"),
+        edits,
+      );
       return res.status(200).json({ draft });
     }),
   );
@@ -513,7 +533,7 @@ export function createSliceRouter(service: SliceService): IRouter {
           .status(400)
           .json({ error: "A conflict id and valid resolution are required." });
       }
-      const draft = service.resolveConflict(
+      const draft = await service.resolveConflict(
         actorOf(req),
         paramOf(req, "id"),
         (body.conflictId as string).trim(),
@@ -529,7 +549,10 @@ export function createSliceRouter(service: SliceService): IRouter {
     requirePermission("clinical:write"),
     requireFlag("clinicalNoteDrafting"),
     asyncRoute(async (req, res) => {
-      const result = service.approveDraft(actorOf(req), paramOf(req, "id"));
+      const result = await service.approveDraft(
+        actorOf(req),
+        paramOf(req, "id"),
+      );
       return res
         .status(201)
         .json({ draft: result.draft, noteId: result.noteId });
@@ -582,7 +605,10 @@ export function createSliceRouter(service: SliceService): IRouter {
     requireSlicePrincipal,
     requirePermission("patient:read"),
     asyncRoute(async (req, res) => {
-      const status = service.getPatientStatus(actorOf(req), paramOf(req, "id"));
+      const status = await service.getPatientStatus(
+        actorOf(req),
+        paramOf(req, "id"),
+      );
       return res.status(200).json(status);
     }),
   );
@@ -593,7 +619,7 @@ export function createSliceRouter(service: SliceService): IRouter {
     requirePermission("assessment:read"),
     requireFlag("referralWorkflow"),
     asyncRoute(async (req, res) => {
-      const workup = service.getReferralWorkup(
+      const workup = await service.getReferralWorkup(
         actorOf(req),
         paramOf(req, "id"),
       );
@@ -607,7 +633,7 @@ export function createSliceRouter(service: SliceService): IRouter {
     requirePermission("patient:read"),
     requireFlag("careJourneyEngine"),
     asyncRoute(async (req, res) => {
-      const events = service.getTimeline(
+      const events = await service.getTimeline(
         actorOf(req),
         paramOf(req, "patientId"),
       );
@@ -620,7 +646,7 @@ export function createSliceRouter(service: SliceService): IRouter {
     requireSlicePrincipal,
     requirePermission("audit:read"),
     asyncRoute(async (req, res) => {
-      const events = service.getAudit(actorOf(req));
+      const events = await service.getAudit(actorOf(req));
       return res.status(200).json({ events });
     }),
   );
@@ -657,27 +683,35 @@ export function createSliceTestApp(
   testApp.use(express.json());
   testApp.use((req: Request, res: Response, next: NextFunction) => {
     const header = req.header("x-test-principal");
-    if (!header)
-      return res.status(401).json({ error: "Authentication is required." });
+    if (!header) {
+      res.status(401).json({ error: "Authentication is required." });
+      return;
+    }
     const principal = principals[header];
-    if (!principal)
-      return res.status(401).json({ error: "Authentication is required." });
+    if (!principal) {
+      res.status(401).json({ error: "Authentication is required." });
+      return;
+    }
     req.user = {
       id: principal.id,
       email: `${principal.id}@synthetic.test`,
       role: principal.role,
       clinicId: null,
     };
-    store.upsertProfile({
-      id: principal.id,
-      displayName: principal.id,
-      roles: [principal.role],
-    });
-    return next();
+    void store
+      .upsertProfile({
+        id: principal.id,
+        displayName: principal.id,
+        roles: [principal.role],
+      })
+      .then(
+        () => next(),
+        (err: unknown) => next(err),
+      );
   });
   const service = new SliceService(store);
   for (const principal of Object.values(principals)) {
-    store.upsertProfile({
+    void store.upsertProfile({
       id: principal.id,
       displayName: principal.id,
       roles: [principal.role],
@@ -687,7 +721,11 @@ export function createSliceTestApp(
   return { app: testApp, service, store };
 }
 
-/** Production wiring: the shared process store behind the canonical guards. */
+/**
+ * Production wiring: PostgreSQL-backed authority when DATABASE_URL is
+ * configured (deny-by-default otherwise), behind the canonical guards.
+ */
 export function createSliceProductionRouter(): IRouter {
-  return createSliceRouter(new SliceService(getSliceStore()));
+  const store = createLazySliceStore(() => getProductionSliceStore());
+  return createSliceRouter(new SliceService(store));
 }

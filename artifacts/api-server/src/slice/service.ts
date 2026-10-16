@@ -21,7 +21,7 @@ import type {
   TransitionRejection,
   TransitionRequest,
 } from "@neurocare/journey";
-import { createAuditEvent } from "@neurocare/audit";
+import { createAuditEvent, type AuditEvent } from "@neurocare/audit";
 import {
   filterTimelineForViewer,
   type TimelineEvent,
@@ -35,6 +35,7 @@ import {
   type DraftConflict,
   type DraftStatement,
   type IntakeAnswers,
+  type IntakeSubmission,
   type JourneySnapshot,
   type Pathway,
   type PatientRecord,
@@ -206,15 +207,15 @@ export class SliceService {
 
   // --- internal helpers ---------------------------------------------------
 
-  private requireReferral(referralId: string): Referral {
-    const referral = this.store.getReferral(referralId);
+  private async requireReferral(referralId: string): Promise<Referral> {
+    const referral = await this.store.getReferral(referralId);
     if (!referral)
       throw new SliceError(404, "NOT_FOUND", "Referral not found.");
     return referral;
   }
 
-  private requireJourney(patientId: string): JourneySnapshot {
-    const journey = this.store.getJourney(patientId);
+  private async requireJourney(patientId: string): Promise<JourneySnapshot> {
+    const journey = await this.store.getJourney(patientId);
     if (!journey) throw new SliceError(404, "NOT_FOUND", "Journey not found.");
     return journey;
   }
@@ -250,11 +251,11 @@ export class SliceService {
    * alone never grants cross-patient reads (otherwise any patient could read
    * any other patient's status/timeline).
    */
-  private assertOwnOrStaff(
+  private async assertOwnOrStaff(
     actor: SliceActor,
     patientId: string,
-  ): PatientRecord {
-    const patient = this.store.getPatient(patientId);
+  ): Promise<PatientRecord> {
+    const patient = await this.store.getPatient(patientId);
     if (!patient)
       throw new SliceError(404, "NOT_FOUND", "Patient record not found.");
     if (patient.profileId === actor.actorId) return patient;
@@ -271,8 +272,11 @@ export class SliceService {
   }
 
   /** Strict ownership — used where only the patient may act (e.g. intake). */
-  private assertOwnRecord(actor: SliceActor, patientId: string): PatientRecord {
-    const patient = this.store.getPatient(patientId);
+  private async assertOwnRecord(
+    actor: SliceActor,
+    patientId: string,
+  ): Promise<PatientRecord> {
+    const patient = await this.store.getPatient(patientId);
     if (!patient)
       throw new SliceError(404, "NOT_FOUND", "Patient record not found.");
     if (patient.profileId !== actor.actorId) {
@@ -285,15 +289,15 @@ export class SliceService {
     return patient;
   }
 
-  private audit(
+  private async audit(
     actor: SliceActor,
     patientId: string,
     action: string,
     resourceId: string,
     category: "CLINICAL" | "ADMIN" = "CLINICAL",
     metadata?: Record<string, unknown>,
-  ) {
-    this.store.appendAudit(
+  ): Promise<void> {
+    await this.store.appendAudit(
       createAuditEvent({
         category,
         action,
@@ -319,23 +323,24 @@ export class SliceService {
     },
   ): Promise<{ referral: Referral; journey: JourneySnapshot }> {
     requireCapability(actor, "patient:write");
-    let patient = this.store.findPatientByProfile(actor.actorId);
+    let patient = await this.store.findPatientByProfile(actor.actorId);
     if (!patient) {
-      this.store.upsertProfile({
+      await this.store.upsertProfile({
         id: actor.actorId,
         displayName: input.displayName,
         roles: actor.roles,
       });
-      patient = this.store.createPatient({
+      patient = await this.store.createPatient({
         id: randomUUID(),
         profileId: actor.actorId,
         displayName: input.displayName,
       });
     }
     const patientRecord: PatientRecord = patient;
-    const existing = this.store
-      .listReferrals()
-      .find((referral) => referral.patientId === patientRecord.id);
+    const referrals = await this.store.listReferrals();
+    const existing = referrals.find(
+      (referral) => referral.patientId === patientRecord.id,
+    );
     if (existing) {
       throw new SliceError(
         409,
@@ -343,7 +348,7 @@ export class SliceService {
         "An assessment request already exists for this record.",
       );
     }
-    this.store.createJourney(patientRecord.id);
+    await this.store.createJourney(patientRecord.id);
     const journey = await this.transition(actor, patientRecord.id, {
       command: "REQUEST_ASSESSMENT",
       payload: {
@@ -352,7 +357,7 @@ export class SliceService {
         requestedPathway: input.pathway,
       },
     });
-    const referral = this.store.createReferral({
+    const referral = await this.store.createReferral({
       id: randomUUID(),
       patientId: patientRecord.id,
       pathway: input.pathway,
@@ -361,7 +366,7 @@ export class SliceService {
       validationStatus: "PENDING_VALIDATION",
       createdAt: new Date().toISOString(),
     });
-    this.audit(
+    await this.audit(
       actor,
       patientRecord.id,
       "referral.created",
@@ -372,23 +377,27 @@ export class SliceService {
     return { referral, journey };
   }
 
-  listReferrals(actor: SliceActor) {
+  async listReferrals(actor: SliceActor) {
     requireCapability(actor, "assessment:read");
-    return this.store.listReferrals().map((referral) => ({
-      referral,
-      journey: this.store.getJourney(referral.patientId),
-      patientDisplayName:
-        this.store.getPatient(referral.patientId)?.displayName ?? "Unknown",
-    }));
+    const referrals = await this.store.listReferrals();
+    return Promise.all(
+      referrals.map(async (referral) => ({
+        referral,
+        journey: await this.store.getJourney(referral.patientId),
+        patientDisplayName:
+          (await this.store.getPatient(referral.patientId))?.displayName ??
+          "Unknown",
+      })),
+    );
   }
 
-  validateReferral(
+  async validateReferral(
     actor: SliceActor,
     referralId: string,
     input: { status: "VALIDATED" | "MISSING_INFORMATION"; note?: string },
-  ): Referral {
+  ): Promise<Referral> {
     requireCapability(actor, "clinic:manage");
-    const referral = this.requireReferral(referralId);
+    const referral = await this.requireReferral(referralId);
     if (
       input.status !== "VALIDATED" &&
       input.status !== "MISSING_INFORMATION"
@@ -399,11 +408,11 @@ export class SliceService {
         "Validation status must be VALIDATED or MISSING_INFORMATION.",
       );
     }
-    const updated = this.store.updateReferral(referralId, {
+    const updated = await this.store.updateReferral(referralId, {
       validationStatus: input.status,
       validationNote: input.note,
     });
-    this.audit(
+    await this.audit(
       actor,
       referral.patientId,
       `referral.validation.${input.status}`,
@@ -419,18 +428,18 @@ export class SliceService {
     input: { scheduledFor: string },
   ): Promise<JourneySnapshot> {
     requireCapability(actor, "appointment:manage");
-    const referral = this.requireReferral(referralId);
+    const referral = await this.requireReferral(referralId);
     // Patients may only book their OWN appointment (permission matrix: "own").
     if (!actor.roles.some((role) => role !== "PATIENT")) {
-      this.assertOwnRecord(actor, referral.patientId);
+      await this.assertOwnRecord(actor, referral.patientId);
     }
     const appointmentId = randomUUID();
     const journey = await this.transition(actor, referral.patientId, {
       command: "BOOK_APPOINTMENT",
       payload: { appointmentId, scheduledFor: input.scheduledFor },
     });
-    this.store.updateReferral(referralId, { appointmentId });
-    this.audit(
+    await this.store.updateReferral(referralId, { appointmentId });
+    await this.audit(
       actor,
       referral.patientId,
       "referral.appointment.booked",
@@ -447,8 +456,8 @@ export class SliceService {
     clinicianProfileId: string,
   ): Promise<JourneySnapshot> {
     requireCapability(actor, "user:manage");
-    const referral = this.requireReferral(referralId);
-    const clinician = this.store.getProfile(clinicianProfileId);
+    const referral = await this.requireReferral(referralId);
+    const clinician = await this.store.getProfile(clinicianProfileId);
     if (!clinician || !clinician.roles.includes("CLINICIAN")) {
       throw new SliceError(
         400,
@@ -460,13 +469,13 @@ export class SliceService {
       command: "TRIAGE_CASE",
       payload: { assignedClinicianId: clinicianProfileId },
     });
-    this.store.updateReferral(referralId, {
+    await this.store.updateReferral(referralId, {
       assignedClinicianProfileId: clinicianProfileId,
     });
-    this.store.updateJourney(referral.patientId, {
+    await this.store.updateJourney(referral.patientId, {
       hasAssignedClinician: true,
     });
-    this.audit(
+    await this.audit(
       actor,
       referral.patientId,
       "referral.clinician.assigned",
@@ -482,12 +491,12 @@ export class SliceService {
     referralId: string,
   ): Promise<JourneySnapshot> {
     requireCapability(actor, "clinical:write");
-    const referral = this.requireReferral(referralId);
+    const referral = await this.requireReferral(referralId);
     const journey = await this.transition(actor, referral.patientId, {
       command: "START_INTAKE",
       payload: { reason: "Clinician opened the intake step" },
     });
-    this.audit(
+    await this.audit(
       actor,
       referral.patientId,
       "referral.intake.started",
@@ -496,7 +505,7 @@ export class SliceService {
     return journey;
   }
 
-  submitIntake(
+  async submitIntake(
     actor: SliceActor,
     referralId: string,
     input: {
@@ -504,11 +513,11 @@ export class SliceService {
       questionnaireScores: readonly { instrument: string; score: number }[];
       documentKinds: readonly string[];
     },
-  ) {
+  ): Promise<IntakeSubmission> {
     requireCapability(actor, "patient:write");
-    const referral = this.requireReferral(referralId);
-    this.assertOwnRecord(actor, referral.patientId);
-    const journey = this.requireJourney(referral.patientId);
+    const referral = await this.requireReferral(referralId);
+    await this.assertOwnRecord(actor, referral.patientId);
+    const journey = await this.requireJourney(referral.patientId);
     if (journey.stage !== "TRIAGE" && journey.stage !== "INTAKE") {
       throw new SliceError(
         409,
@@ -516,7 +525,7 @@ export class SliceService {
         "Intake cannot be submitted at this stage of the journey.",
       );
     }
-    const intake = this.store.saveIntake({
+    const intake = await this.store.saveIntake({
       id: randomUUID(),
       referralId,
       patientId: referral.patientId,
@@ -525,9 +534,11 @@ export class SliceService {
       documentKinds: input.documentKinds,
       submittedAt: new Date().toISOString(),
     });
-    this.store.updateJourney(referral.patientId, { hasIntakeCompleted: true });
-    this.store.completeTasks(referral.patientId, ["INTAKE"]);
-    this.audit(
+    await this.store.updateJourney(referral.patientId, {
+      hasIntakeCompleted: true,
+    });
+    await this.store.completeTasks(referral.patientId, ["INTAKE"]);
+    await this.audit(
       actor,
       referral.patientId,
       "intake.submitted",
@@ -546,12 +557,12 @@ export class SliceService {
     referralId: string,
   ): Promise<JourneySnapshot> {
     requireCapability(actor, "clinical:write");
-    const referral = this.requireReferral(referralId);
+    const referral = await this.requireReferral(referralId);
     const journey = await this.transition(actor, referral.patientId, {
       command: "START_ASSESSMENT",
       payload: { reason: "Assessment consultation beginning" },
     });
-    this.audit(
+    await this.audit(
       actor,
       referral.patientId,
       "referral.assessment.started",
@@ -562,7 +573,7 @@ export class SliceService {
 
   // --- consultation: consent, transcript, bookmarks --------------------------
 
-  recordConsent(
+  async recordConsent(
     actor: SliceActor,
     referralId: string,
     input: {
@@ -573,8 +584,8 @@ export class SliceService {
     },
   ) {
     requireCapability(actor, "clinical:write");
-    const referral = this.requireReferral(referralId);
-    const journey = this.requireJourney(referral.patientId);
+    const referral = await this.requireReferral(referralId);
+    const journey = await this.requireJourney(referral.patientId);
     if (journey.stage !== "ASSESSMENT") {
       throw new SliceError(
         409,
@@ -582,14 +593,14 @@ export class SliceService {
         "Consent is recorded during the assessment consultation.",
       );
     }
-    if (this.store.getActiveConsent(referralId)) {
+    if (await this.store.getActiveConsent(referralId)) {
       throw new SliceError(
         409,
         "CONSENT_EXISTS",
         "Consent has already been recorded for this consultation.",
       );
     }
-    const consent = this.store.createConsent({
+    const consent = await this.store.createConsent({
       id: randomUUID(),
       referralId,
       patientId: referral.patientId,
@@ -600,8 +611,8 @@ export class SliceService {
       restrictions: input.restrictions,
       recordedAt: new Date().toISOString(),
     });
-    this.store.setConsultationState(referralId, "READY");
-    this.audit(
+    await this.store.setConsultationState(referralId, "READY");
+    await this.audit(
       actor,
       referral.patientId,
       "consultation.consent.recorded",
@@ -615,14 +626,14 @@ export class SliceService {
     return consent;
   }
 
-  ingestTranscript(
+  async ingestTranscript(
     actor: SliceActor,
     referralId: string,
     segments: readonly Omit<TranscriptSegment, "id">[],
-  ): { segments: readonly TranscriptSegment[]; state: ConsultationState } {
+  ): Promise<{ segments: readonly TranscriptSegment[]; state: ConsultationState }> {
     requireCapability(actor, "clinical:write");
-    const referral = this.requireReferral(referralId);
-    if (!this.store.getActiveConsent(referralId)) {
+    const referral = await this.requireReferral(referralId);
+    if (!(await this.store.getActiveConsent(referralId))) {
       throw new SliceError(
         409,
         "CONSENT_MISSING",
@@ -633,9 +644,9 @@ export class SliceService {
       id: randomUUID(),
       ...segment,
     }));
-    this.store.addSegments(referralId, stored);
-    this.store.setConsultationState(referralId, "DRAFT_READY");
-    this.audit(
+    await this.store.addSegments(referralId, stored);
+    await this.store.setConsultationState(referralId, "DRAFT_READY");
+    await this.audit(
       actor,
       referral.patientId,
       "consultation.transcript.processed",
@@ -647,29 +658,28 @@ export class SliceService {
     );
     return {
       segments: stored,
-      state: this.store.getConsultationState(referralId),
+      state: await this.store.getConsultationState(referralId),
     };
   }
 
-  addBookmark(
+  async addBookmark(
     actor: SliceActor,
     referralId: string,
     input: { segmentId: string; label: string },
-  ): Bookmark {
+  ): Promise<Bookmark> {
     requireCapability(actor, "clinical:write");
-    const referral = this.requireReferral(referralId);
-    const segment = this.store
-      .listSegments(referralId)
-      .find((item) => item.id === input.segmentId);
+    const referral = await this.requireReferral(referralId);
+    const segments = await this.store.listSegments(referralId);
+    const segment = segments.find((item) => item.id === input.segmentId);
     if (!segment)
       throw new SliceError(404, "NOT_FOUND", "Transcript segment not found.");
-    const bookmark = this.store.addBookmark(referralId, {
+    const bookmark = await this.store.addBookmark(referralId, {
       id: randomUUID(),
       segmentId: input.segmentId,
       label: input.label,
       createdAt: new Date().toISOString(),
     });
-    this.audit(
+    await this.audit(
       actor,
       referral.patientId,
       "consultation.bookmark.added",
@@ -680,19 +690,21 @@ export class SliceService {
 
   // --- AI drafting and human review ------------------------------------------
 
-  generateDraft(actor: SliceActor, referralId: string): AiDraft {
+  async generateDraft(
+    actor: SliceActor,
+    referralId: string,
+  ): Promise<AiDraft> {
     requireCapability(actor, "ai:use");
-    const referral = this.requireReferral(referralId);
-    if (!this.store.getActiveConsent(referralId)) {
+    const referral = await this.requireReferral(referralId);
+    if (!(await this.store.getActiveConsent(referralId))) {
       throw new SliceError(
         409,
         "CONSENT_MISSING",
         "AI drafting requires recorded consent for this consultation.",
       );
     }
-    const segments = this.store
-      .listSegments(referralId)
-      .filter((segment) => !segment.excluded);
+    const allSegments = await this.store.listSegments(referralId);
+    const segments = allSegments.filter((segment) => !segment.excluded);
     if (segments.length === 0) {
       throw new SliceError(
         409,
@@ -703,10 +715,10 @@ export class SliceService {
     const output = generateAssessmentDraft({
       referral,
       segments,
-      intake: this.store.getIntake(referralId),
+      intake: await this.store.getIntake(referralId),
     });
     const now = new Date().toISOString();
-    const draft = this.store.createDraft({
+    const draft = await this.store.createDraft({
       id: randomUUID(),
       referralId,
       patientId: referral.patientId,
@@ -720,8 +732,8 @@ export class SliceService {
       createdAt: now,
       updatedAt: now,
     });
-    this.store.setConsultationState(referralId, "CLINICIAN_REVIEW");
-    this.audit(
+    await this.store.setConsultationState(referralId, "CLINICIAN_REVIEW");
+    await this.audit(
       actor,
       referral.patientId,
       "ai.draft.generated",
@@ -737,13 +749,13 @@ export class SliceService {
     return draft;
   }
 
-  amendDraft(
+  async amendDraft(
     actor: SliceActor,
     draftId: string,
     edits: readonly { statementId: string; text: string }[],
-  ): AiDraft {
+  ): Promise<AiDraft> {
     requireCapability(actor, "clinical:write");
-    const draft = this.store.getDraft(draftId);
+    const draft = await this.store.getDraft(draftId);
     if (!draft) throw new SliceError(404, "NOT_FOUND", "Draft not found.");
     if (draft.status === "APPROVED") {
       throw new SliceError(
@@ -777,10 +789,9 @@ export class SliceService {
         };
       },
     );
-    const segments = this.store
-      .listSegments(draft.referralId)
-      .filter((segment) => !segment.excluded);
-    const updated = this.store.updateDraft(draftId, {
+    const allSegments = await this.store.listSegments(draft.referralId);
+    const segments = allSegments.filter((segment) => !segment.excluded);
+    const updated = await this.store.updateDraft(draftId, {
       statements,
       status: "AMENDED",
       version: draft.version + 1,
@@ -790,7 +801,7 @@ export class SliceService {
         ...scanStatements(statements),
       ],
     });
-    this.audit(
+    await this.audit(
       actor,
       draft.patientId,
       "ai.draft.amended",
@@ -801,14 +812,14 @@ export class SliceService {
     return updated;
   }
 
-  resolveConflict(
+  async resolveConflict(
     actor: SliceActor,
     draftId: string,
     conflictId: string,
     resolution: "ACCEPTED_AS_IS" | "RESOLVED",
-  ): AiDraft {
+  ): Promise<AiDraft> {
     requireCapability(actor, "clinical:write");
-    const draft = this.store.getDraft(draftId);
+    const draft = await this.store.getDraft(draftId);
     if (!draft) throw new SliceError(404, "NOT_FOUND", "Draft not found.");
     if (draft.status === "APPROVED") {
       throw new SliceError(
@@ -829,12 +840,12 @@ export class SliceService {
         "Conflict not found in this draft.",
       );
     }
-    const updated = this.store.updateDraft(draftId, {
+    const updated = await this.store.updateDraft(draftId, {
       conflicts,
       version: draft.version + 1,
       updatedAt: new Date().toISOString(),
     });
-    this.audit(
+    await this.audit(
       actor,
       draft.patientId,
       "ai.draft.conflict_reviewed",
@@ -845,12 +856,12 @@ export class SliceService {
     return updated;
   }
 
-  approveDraft(
+  async approveDraft(
     actor: SliceActor,
     draftId: string,
-  ): { draft: AiDraft; noteId: string } {
+  ): Promise<{ draft: AiDraft; noteId: string }> {
     requireCapability(actor, "clinical:write");
-    const draft = this.store.getDraft(draftId);
+    const draft = await this.store.getDraft(draftId);
     if (!draft) throw new SliceError(404, "NOT_FOUND", "Draft not found.");
     if (draft.status === "APPROVED") {
       throw new SliceError(
@@ -872,7 +883,7 @@ export class SliceService {
       );
     }
     const signedAt = new Date().toISOString();
-    const note = this.store.createNote({
+    const note = await this.store.createNote({
       id: randomUUID(),
       referralId: draft.referralId,
       patientId: draft.patientId,
@@ -882,13 +893,13 @@ export class SliceService {
       version: draft.version,
       signedAt,
     });
-    const approved = this.store.updateDraft(draftId, {
+    const approved = await this.store.updateDraft(draftId, {
       status: "APPROVED",
       signedNoteId: note.id,
       updatedAt: signedAt,
     });
-    this.store.setConsultationState(draft.referralId, "SIGNED");
-    this.store.appendAudit(
+    await this.store.setConsultationState(draft.referralId, "SIGNED");
+    await this.store.appendAudit(
       createAuditEvent({
         category: "CLINICAL",
         action: "clinical.note.signed",
@@ -900,7 +911,7 @@ export class SliceService {
         metadata: { draftId: draft.id, version: draft.version },
       }),
     );
-    this.store.appendTimeline({
+    await this.store.appendTimeline({
       id: `${draft.patientId}:NOTE:${note.id}`,
       type: "CLINICAL_NOTE",
       occurredAt: signedAt,
@@ -926,8 +937,8 @@ export class SliceService {
     },
   ): Promise<JourneySnapshot> {
     requireCapability(actor, "clinical:write");
-    const referral = this.requireReferral(referralId);
-    if (!this.store.getSignedNote(referralId)) {
+    const referral = await this.requireReferral(referralId);
+    if (!(await this.store.getSignedNote(referralId))) {
       throw new SliceError(
         409,
         "SIGNED_NOTE_REQUIRED",
@@ -941,8 +952,8 @@ export class SliceService {
         diagnosisSummary: input.diagnosisSummary,
       },
     });
-    this.store.completeTasks(referral.patientId, ["PENDING_NOTE"]);
-    this.audit(
+    await this.store.completeTasks(referral.patientId, ["PENDING_NOTE"]);
+    await this.audit(
       actor,
       referral.patientId,
       "referral.outcome.recorded",
@@ -955,13 +966,15 @@ export class SliceService {
     return journey;
   }
 
-  getPatientStatus(actor: SliceActor, patientId: string) {
-    this.assertOwnOrStaff(actor, patientId);
-    const journey = this.requireJourney(patientId);
+  async getPatientStatus(actor: SliceActor, patientId: string) {
+    await this.assertOwnOrStaff(actor, patientId);
+    const journey = await this.requireJourney(patientId);
     const guidance = STAGE_GUIDANCE[journey.stage];
-    const openTasks = this.store
-      .listOpenTasks(patientId)
-      .map((task) => ({ type: task.type, title: task.title }));
+    const tasks = await this.store.listOpenTasks(patientId);
+    const openTasks = tasks.map((task) => ({
+      type: task.type,
+      title: task.title,
+    }));
     return {
       patientId,
       stage: journey.stage,
@@ -972,34 +985,54 @@ export class SliceService {
     };
   }
 
-  getTimeline(actor: SliceActor, patientId: string): TimelineEvent[] {
-    this.assertOwnOrStaff(actor, patientId);
+  async getTimeline(
+    actor: SliceActor,
+    patientId: string,
+  ): Promise<TimelineEvent[]> {
+    await this.assertOwnOrStaff(actor, patientId);
     const clearance = clearanceFor(actor);
     return filterTimelineForViewer(
-      this.store.listTimeline(patientId),
+      await this.store.listTimeline(patientId),
       clearance,
     );
   }
 
-  getAudit(actor: SliceActor) {
+  async getAudit(actor: SliceActor): Promise<AuditEvent[]> {
     requireCapability(actor, "audit:read");
     return this.store.listAudit();
   }
 
-  getReferralWorkup(actor: SliceActor, referralId: string) {
+  async getReferralWorkup(actor: SliceActor, referralId: string) {
     requireCapability(actor, "assessment:read");
-    const referral = this.requireReferral(referralId);
-    const journey = this.requireJourney(referral.patientId);
+    const referral = await this.requireReferral(referralId);
+    const journey = await this.requireJourney(referral.patientId);
+    const [
+      intake,
+      consent,
+      consultationState,
+      segments,
+      bookmarks,
+      signedNote,
+      openTasks,
+    ] = await Promise.all([
+      this.store.getIntake(referralId),
+      this.store.getActiveConsent(referralId),
+      this.store.getConsultationState(referralId),
+      this.store.listSegments(referralId),
+      this.store.listBookmarks(referralId),
+      this.store.getSignedNote(referralId),
+      this.store.listOpenTasks(referral.patientId),
+    ]);
     return {
       referral,
       journey,
-      intake: this.store.getIntake(referralId),
-      consent: this.store.getActiveConsent(referralId),
-      consultationState: this.store.getConsultationState(referralId),
-      segments: this.store.listSegments(referralId),
-      bookmarks: this.store.listBookmarks(referralId),
-      signedNote: this.store.getSignedNote(referralId),
-      openTasks: this.store.listOpenTasks(referral.patientId),
+      intake,
+      consent,
+      consultationState,
+      segments,
+      bookmarks,
+      signedNote,
+      openTasks,
     };
   }
 }
