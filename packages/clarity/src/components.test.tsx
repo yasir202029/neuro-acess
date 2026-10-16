@@ -88,7 +88,7 @@ describe("ClaritySensitiveDataShield", () => {
 describe("ClarityConfirmationPanel — clinical safety guardrail", () => {
   it("disables confirm until warnings acknowledged", () => {
     const html = renderToStaticMarkup(
-      <ClarityConfirmationPanel patientLabel="Ellison, Maya (DEMO-0001)" action="Sign clinical note" warnings={["Unsigned draft will be locked"]} onCancel={() => {}} onConfirm={() => {}} />,
+      <ClarityConfirmationPanel patientLabel="Ellison, Maya (DEMO-0001)" action="Sign clinical note" warnings={["Unsigned draft will be locked"]} onCancel={() => { }} onConfirm={() => { }} />,
     );
     expect(html).toContain("disabled");
     expect(html).toContain("Ellison, Maya (DEMO-0001)");
@@ -96,7 +96,7 @@ describe("ClarityConfirmationPanel — clinical safety guardrail", () => {
 
   it("requires a reason of minimum length when configured", () => {
     const html = renderToStaticMarkup(
-      <ClarityConfirmationPanel patientLabel="X" action="Y" requireReason onCancel={() => {}} onConfirm={() => {}} />,
+      <ClarityConfirmationPanel patientLabel="X" action="Y" requireReason onCancel={() => { }} onConfirm={() => { }} />,
     );
     expect(html).toContain("Reason (required");
   });

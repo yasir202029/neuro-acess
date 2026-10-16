@@ -22,8 +22,8 @@ const req: any = { log: { info: () => {} }, user: {} };
 describe("ClinicalWorkstationService", () => {
   const svc = new ClinicalWorkstationService();
 
-  it("getPatient returns the synthetic 360 summary", () => {
-    const p = svc.getPatient(actor, PATIENT_ID);
+  it("getPatient returns the synthetic 360 summary", async () => {
+    const p = await svc.getPatient(actor, PATIENT_ID);
     expect(p.displayName).toBe("Maya Thompson");
     expect(p.pathway).toBe("ADHD");
     expect(p.riskSeverity).toBe("MODERATE");
@@ -31,23 +31,23 @@ describe("ClinicalWorkstationService", () => {
     expect(p.openAlerts.length).toBe(1);
   });
 
-  it("getPatient rejects unknown id and bad uuid", () => {
-    expect(() => svc.getPatient(actor, "00000000-0000-4000-8000-000000000000")).toThrow(/Patient not found/);
-    expect(() => svc.getPatient(actor, "not-a-uuid")).toThrow(/Invalid patient identifier/);
+  it("getPatient rejects unknown id and bad uuid", async () => {
+    await expect(svc.getPatient(actor, "00000000-0000-4000-8000-000000000000")).rejects.toThrow(/Patient not found/);
+    await expect(svc.getPatient(actor, "not-a-uuid")).rejects.toThrow(/Invalid patient identifier/);
   });
 
-  it("listPatients paginates and searches", () => {
-    const all = svc.listPatients(actor, { page: 1, pageSize: 10 });
+  it("listPatients paginates and searches", async () => {
+    const all = await svc.listPatients(actor, { page: 1, pageSize: 10 });
     expect(all.total).toBe(2);
     expect(all.items.length).toBe(2);
-    const found = svc.listPatients(actor, { page: 1, pageSize: 10, search: "Oliver" });
+    const found = await svc.listPatients(actor, { page: 1, pageSize: 10, search: "Oliver" });
     expect(found.items.length).toBe(1);
     expect(found.items[0].displayName).toBe("Oliver Grant");
   });
 
-  it("listPatients enforces capability", () => {
+  it("listPatients enforces capability", async () => {
     const noRead = { ...actor, capabilities: new Set() as unknown as ReadonlySet<WorkstationCapability> };
-    expect(() => svc.listPatients(noRead, {})).toThrow(/Capability required/);
+    await expect(svc.listPatients(noRead, {})).rejects.toThrow(/Capability required/);
   });
 
   it("createClinicalNote creates a DRAFT note", () => {
@@ -131,22 +131,22 @@ describe("ClinicalWorkstationService", () => {
     expect(note.authorRole).toBe("CLINICIAN");
   });
 
-  it("acknowledgeAlert marks an alert acknowledged", () => {
-    const alert = svc.acknowledgeAlert(actor, req, {
+  it("acknowledgeAlert marks an alert acknowledged", async () => {
+    const alert = await svc.acknowledgeAlert(actor, req, {
       patientId: PATIENT_ID,
       alertId: "alert-1",
     });
     expect(alert.acknowledgedBy).toBe("clinician-01");
     expect(alert.acknowledgedAt).toBeDefined();
-    expect(() =>
+    await expect(
       svc.acknowledgeAlert(actor, req, { patientId: "bad", alertId: "alert-1" }),
-    ).toThrow(/Invalid patient identifier/);
-    expect(() =>
+    ).rejects.toThrow(/Invalid patient identifier/);
+    await expect(
       svc.acknowledgeAlert(actor, req, {
         patientId: "00000000-0000-4000-8000-000000000000",
         alertId: "alert-1",
       }),
-    ).toThrow(/Patient not found/);
+    ).rejects.toThrow(/Patient not found/);
   });
 
   it("listVitals returns a time series", () => {
