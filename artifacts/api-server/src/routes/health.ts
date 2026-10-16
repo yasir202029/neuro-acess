@@ -30,13 +30,13 @@ router.get("/system/status", authenticate, async (_req, res) => {
   }
 
   const services = [
-    { name: "API", status: "operational" as const },
-    { name: "Database", status: (dbStatus === "connected" ? "operational" : "degraded") as const },
-    { name: "Message Delivery", status: "operational" as const },
-    { name: "Document Processing", status: "operational" as const },
-    { name: "Payment Services", status: "operational" as const },
-    { name: "AI Service", status: "standby" as const },
-    { name: "Background Jobs", status: "operational" as const },
+    { name: "API", status: "operational" },
+    { name: "Database", status: (dbStatus === "connected" ? "operational" : "degraded") },
+    { name: "Message Delivery", status: "operational" },
+    { name: "Document Processing", status: "operational" },
+    { name: "Payment Services", status: "operational" },
+    { name: "AI Service", status: "standby" },
+    { name: "Background Jobs", status: "operational" },
   ];
 
   res.json({ services, timestamp: new Date().toISOString() });

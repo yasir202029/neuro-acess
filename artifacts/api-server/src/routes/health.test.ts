@@ -9,7 +9,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createServer } from "http";
-import { address } from "net";
+
 import { pool } from "@workspace/db";
 import { hasPermission, type PlatformRole } from "../security/roles";
 
@@ -44,7 +44,7 @@ describe("Health endpoints", () => {
 
     await new Promise<void>((resolve) => {
       server.listen(0, "127.0.0.1", () => {
-        port = (server.address() as ReturnType<typeof address>).port;
+        port = (server as any).address().port;
         baseUrl = `http://127.0.0.1:${port}`;
         resolve();
       });

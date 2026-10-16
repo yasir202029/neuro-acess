@@ -199,7 +199,6 @@ function nextActionsFor(status: WorkQueueStatus, taskType: WorkQueueTaskType, ow
 
   return actions;
 }
-import { WorkQueueCapability as WQCap } from "../types/work-queue";
 
 function requireCapability(actor: WorkQueueActor | undefined, capability: WorkQueueCapability): void {
   if (!actor || !actor.capabilities.has(capability)) {
@@ -263,7 +262,7 @@ function buildSyntheticItems(actor: WorkQueueActor): WorkQueueItem[] {
       createdAt,
       dueAt,
       blockingReason: d.blockingReason,
-      nextPermittedActions: nextActionsFor(d.status, d.taskType, d.ownerId ?? null, actor.actorId),
+      nextPermittedActions: nextActionsFor(d.status, d.taskType, null, actor.actorId),
     });
   }
 
@@ -282,15 +281,14 @@ export class WorkQueueService {
   listQueueBuckets(actor: WorkQueueActor | undefined): WorkQueueBucket[] {
     requireCapability(actor, WQCap.READ_QUEUE);
     const items = this.getItems(actor!);
-    const buckets = [...WORK_QUEUE_BUCKETS];
-    for (const bucket of buckets) {
-      bucket.count = items.filter((i) => {
+    return WORK_QUEUE_BUCKETS.map(bucket => ({
+      ...bucket,
+      count: items.filter((i) => {
         if (bucket.statusFilter && i.status !== bucket.statusFilter) return false;
         if (bucket.taskTypeFilter && i.taskType !== bucket.taskTypeFilter) return false;
         return true;
-      }).length;
-    }
-    return buckets;
+      }).length,
+    }));
   }
   listQueueItems(
     actor: WorkQueueActor | undefined,

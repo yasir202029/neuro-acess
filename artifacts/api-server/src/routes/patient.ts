@@ -15,7 +15,7 @@ import {
   paymentsTable,
   profilesTable,
   patientsTable,
-  notificationsTable,
+
   type InsertPatientOnboarding,
   type InsertSafetyScreening,
   type InsertScreeningQuestionnaire,
@@ -91,6 +91,8 @@ router.post("/patient/onboarding", authenticate, requirePermission("patient:writ
     progress: result.progress,
     completedAt: result.completedAt,
   });
+});
+
 // ── Safety screening ──
 router.get("/patient/safety-screening", authenticate, requirePermission("patient:read"), async (req, res) => {
   const userId = req.user!.id;
@@ -116,7 +118,7 @@ router.post("/patient/safety-screening", authenticate, requirePermission("patien
   const body = z
     .object({
       pathway: z.enum(["ADHD", "AUTISM", "BOTH", "GENERAL"]),
-      answers: z.record(z.unknown()),
+      answers: z.record(z.string(), z.unknown()),
     })
     .safeParse(req.body);
   if (!body.success) {
@@ -187,7 +189,7 @@ router.post("/patient/questionnaires", authenticate, requirePermission("patient:
     .object({
       questionnaireType: z.string().min(1),
       version: z.string().min(1),
-      answers: z.record(z.unknown()),
+      answers: z.record(z.string(), z.unknown()),
       totalScore: z.number().int().optional(),
       interpretation: z.string().optional(),
     })
@@ -459,24 +461,5 @@ router.get("/patient/prescriptions", authenticate, requirePermission("patient:re
     }))
   );
 });
-
-// ── Patient notifications ──
-router.get("/patient/notifications", authenticate, requirePermission("patient:read"), async (req, res) => {
-  const userId = req.user!.id;
-  const { notificationsTable } = await import("@workspace/db");
-  const rows = await db
-    .select()
-    .from(notificationsTable)
-    .where(eq(notificationsTable.patientId, userId))
-    .orderBy(desc(notificationsTable.createdAt));
-  return res.json(
-    rows.map((r) => ({
-      id: r.id,
-      audience: r.audience,
-      channel: r.channel,
-      template: r.template,
-      createdAt: r.createdAt,
-    }))
-  );
 
 export default router;
