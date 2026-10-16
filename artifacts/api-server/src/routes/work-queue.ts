@@ -4,6 +4,7 @@ import { authenticate, requirePermission, type AuthenticatedUser } from "../secu
 import { auditEvent } from "../security/audit";
 import { WorkQueueService } from "../services/work-queue.service";
 import { WorkQueueActor, WorkQueueError, WorkQueueFilterView, type WorkQueueActionRequest } from "../types/work-queue";
+import type { Capability } from "@neurocare/permissions";
 
 const router: IRouter = Router();
 const service = new WorkQueueService();
@@ -12,9 +13,9 @@ function actorFromUser(user: AuthenticatedUser): WorkQueueActor {
   return {
     actorId: user.id,
     email: user.email,
-    roles: [user.role] as unknown as ReadonlySet<string>,
+    roles: [user.role] as unknown as string[],
     clinicId: user.clinicId ?? null,
-    capabilities: new Set<string>() as unknown as ReadonlySet<string>,
+    capabilities: new Set<string>() as unknown as ReadonlySet<Capability>,
   };
 }
 
@@ -33,7 +34,7 @@ const queueItemIdParam = z.object({ itemId: z.string().uuid("Invalid queue item 
 const actionBody = z
   .object({
     actionId: z.string().min(1),
-    payload: z.record(z.unknown()).optional(),
+    payload: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();
 
