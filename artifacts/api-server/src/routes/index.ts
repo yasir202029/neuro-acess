@@ -9,6 +9,8 @@ import questionnairesRouter from "./questionnaires";
 import intakeRouter from "./intake";
 import clinicianOperationsRouter from "./clinician-operations";
 import clinicalWorkstationRouter from "./clinical-workstation";
+import authRouter from "./auth";
+import patientRouter from "./patient";
 import { createSliceProductionRouter } from "./slice";
 
 const router: IRouter = Router();
@@ -23,6 +25,8 @@ router.use(questionnairesRouter);
 router.use(intakeRouter);
 router.use(clinicianOperationsRouter);
 router.use(clinicalWorkstationRouter);
+router.use(authRouter);
+router.use(patientRouter);
 router.use(createSliceProductionRouter());
 
 export default router;
