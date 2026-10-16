@@ -348,3 +348,168 @@ export type InsertAiDraft = z.infer<typeof insertAiDraftSchema>;
 export type Referral = typeof referralsTable.$inferSelect;
 export type JourneyState = typeof journeyStatesTable.$inferSelect;
 export type AiDraft = typeof aiDraftsTable.$inferSelect;
+
+// ============================================================================
+// APEX Platform tables — patient onboarding, screening, booking, payments,
+// vitals, prescriptions, AI drafting, transcription, earnings, stars
+// ============================================================================
+
+export const patientOnboardingTable = pgTable("patient_onboarding", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull().unique(),
+  stage: text("stage").notNull().default("account"),
+  progress: integer("progress").notNull().default(0),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt,
+  updatedAt,
+});
+
+export const safetyScreeningTable = pgTable("safety_screening", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull().unique(),
+  pathway: text("pathway").notNull(),
+  answers: jsonb("answers").notNull().default("{}"),
+  status: text("status").notNull().default("pending"),
+  reviewNotes: text("review_notes"),
+  reviewedByProfileId: text("reviewed_by_profile_id"),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+  createdAt,
+  updatedAt,
+});
+
+export const screeningQuestionnaireTable = pgTable("screening_questionnaire", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull(),
+  questionnaireType: text("questionnaire_type").notNull(),
+  version: text("version").notNull(),
+  answers: jsonb("answers").notNull().default("{}"),
+  totalScore: integer("total_score"),
+  interpretation: text("interpretation"),
+  status: text("status").notNull().default("in_progress"),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  createdAt,
+  updatedAt,
+});
+
+export const patientVitalsTable = pgTable("patient_vitals", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull(),
+  recordedAt: timestamp("recorded_at", { withTimezone: true }).notNull().defaultNow(),
+  recordedBy: text("recorded_by").notNull().default("patient"),
+  systolicBp: integer("systolic_bp"),
+  diastolicBp: integer("diastolic_bp"),
+  heartRate: integer("heart_rate"),
+  temperature: integer("temperature"),
+  weightKg: numeric("weight_kg", { precision: 5, scale: 2 }),
+  heightCm: numeric("height_cm", { precision: 5, scale: 2 }),
+  oxygenSaturation: integer("oxygen_saturation"),
+  contextualNote: text("contextual_note"),
+  submissionId: text("submission_id").notNull().unique(),
+  createdAt,
+});
+
+export const prescriptionTable = pgTable("prescription", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  patientId: text("patient_id").notNull(),
+  clinicianId: text("clinician_id").notNull(),
+  appointmentId: text("appointment_id"),
+  medication: text("medication").notNull(),
+  dosage: text("dosage").notNull(),
+  frequency: text("frequency").notNull(),
+  status: text("status").notNull().default("draft"),
+  authorisedByProfileId: text("authorised_by_profile_id"),
+  authorisedAt: timestamp("authorised_at", { withTimezone: true }),
+  issuedAt: timestamp("issued_at", { withTimezone: true }),
+  createdAt,
+  updatedAt,
+});
+
+export const clinicalNoteAIDraftTable = pgTable("clinical_note_ai_draft", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  noteId: text("note_id").notNull().unique(),
+  patientId: text("patient_id").notNull(),
+  originalBody: text("original_body").notNull(),
+  aiDraftBody: text("ai_draft_body").notNull(),
+  finalBody: text("final_body"),
+  status: text("status").notNull().default("draft"),
+  clinicianProfileId: text("clinician_profile_id").notNull(),
+  createdAt,
+  updatedAt,
+});
+
+export const transcriptionSessionTable = pgTable("transcription_session", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  sessionId: text("session_id").notNull().unique(),
+  patientId: text("patient_id").notNull(),
+  clinicianProfileId: text("clinician_profile_id").notNull(),
+  status: text("status").notNull().default("not_recording"),
+  transcriptUrl: text("transcript_url"),
+  consentGivenAt: timestamp("consent_given_at", { withTimezone: true }),
+  recordingStartedAt: timestamp("recording_started_at", { withTimezone: true }),
+  recordingStoppedAt: timestamp("recording_stopped_at", { withTimezone: true }),
+  createdAt,
+  updatedAt,
+});
+
+export const clinicianEarningsTable = pgTable("clinician_earnings", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  clinicianId: text("clinician_id").notNull(),
+  appointmentId: text("appointment_id"),
+  assessmentId: text("assessment_id"),
+  reportId: text("report_id"),
+  amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("gbp"),
+  status: text("status").notNull().default("pending"),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
+  createdAt,
+  updatedAt,
+});
+
+export const clinicianStarTable = pgTable("clinician_star", {
+  clinicId: text("clinic_id"),
+  id: id("id"),
+  clinicianId: text("clinician_id").notNull(),
+  eventType: text("event_type").notNull(),
+  eventId: text("event_id").notNull(),
+  starsAwarded: integer("stars_awarded").notNull().default(0),
+  awardedAt: timestamp("awarded_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt,
+});
+
+export const insertPatientOnboardingSchema = createInsertSchema(patientOnboardingTable).omit({ createdAt: true, updatedAt: true });
+export const insertSafetyScreeningSchema = createInsertSchema(safetyScreeningTable).omit({ createdAt: true, updatedAt: true });
+export const insertScreeningQuestionnaireSchema = createInsertSchema(screeningQuestionnaireTable).omit({ createdAt: true, updatedAt: true });
+export const insertPatientVitalsSchema = createInsertSchema(patientVitalsTable).omit({ createdAt: true });
+export const insertPrescriptionSchema = createInsertSchema(prescriptionTable).omit({ createdAt: true, updatedAt: true });
+export const insertClinicalNoteAIDraftSchema = createInsertSchema(clinicalNoteAIDraftTable).omit({ createdAt: true, updatedAt: true });
+export const insertTranscriptionSessionSchema = createInsertSchema(transcriptionSessionTable).omit({ createdAt: true, updatedAt: true });
+export const insertClinicianEarningsSchema = createInsertSchema(clinicianEarningsTable).omit({ createdAt: true, updatedAt: true });
+export const insertClinicianStarSchema = createInsertSchema(clinicianStarTable).omit({ createdAt: true });
+
+export type PatientOnboarding = typeof patientOnboardingTable.$inferSelect;
+export type SafetyScreening = typeof safetyScreeningTable.$inferSelect;
+export type ScreeningQuestionnaire = typeof screeningQuestionnaireTable.$inferSelect;
+export type PatientVitals = typeof patientVitalsTable.$inferSelect;
+export type Prescription = typeof prescriptionTable.$inferSelect;
+export type ClinicalNoteAIDraft = typeof clinicalNoteAIDraftTable.$inferSelect;
+export type TranscriptionSession = typeof transcriptionSessionTable.$inferSelect;
+export type ClinicianEarnings = typeof clinicianEarningsTable.$inferSelect;
+export type ClinicianStar = typeof clinicianStarTable.$inferSelect;
+
+export type InsertPatientOnboarding = z.infer<typeof insertPatientOnboardingSchema>;
+export type InsertSafetyScreening = z.infer<typeof insertSafetyScreeningSchema>;
+export type InsertScreeningQuestionnaire = z.infer<typeof insertScreeningQuestionnaireSchema>;
+export type InsertPatientVitals = z.infer<typeof insertPatientVitalsSchema>;
+export type InsertPrescription = z.infer<typeof insertPrescriptionSchema>;
+export type InsertClinicalNoteAIDraft = z.infer<typeof insertClinicalNoteAIDraftSchema>;
+export type InsertTranscriptionSession = z.infer<typeof insertTranscriptionSessionSchema>;
+export type InsertClinicianEarnings = z.infer<typeof insertClinicianEarningsSchema>;
+export type InsertClinicianStar = z.infer<typeof insertClinicianStarSchema>;
