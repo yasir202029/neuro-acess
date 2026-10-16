@@ -76,11 +76,11 @@ router.get(
   "/workstation/patients/:patientId",
   authenticate,
   requirePermission("patient:read"),
-  (req, res) => {
+  async (req, res) => {
     const parsed = patientIdParam.safeParse(req.params);
     if (!parsed.success) return res.status(400).json({ error: "Invalid patient identifier.", code: "INVALID_PATIENT_ID" });
     try {
-      const patient = service.getPatient(actorFromUser(req.user!), parsed.data.patientId);
+      const patient = await service.getPatient(actorFromUser(req.user!), parsed.data.patientId);
       auditEvent(req, res, "workstation.patient.read", "patient", parsed.data.patientId);
       return res.json(patient);
     } catch (error) {
@@ -94,12 +94,12 @@ router.get(
   "/workstation/patients",
   authenticate,
   requirePermission("patient:read"),
-  (req, res) => {
+  async (req, res) => {
     try {
       const page = Math.max(1, Number(req.query.page) || 1);
       const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize) || 20));
       const search = typeof req.query.search === "string" ? req.query.search : undefined;
-      const result = service.listPatients(actorFromUser(req.user!), { page, pageSize, search });
+      const result = await service.listPatients(actorFromUser(req.user!), { page, pageSize, search });
       auditEvent(req, res, "workstation.patients.list", "patient");
       return res.json(result);
     } catch (error) {
@@ -251,7 +251,7 @@ router.post(
   "/workstation/patients/:patientId/alerts/:alertId/acknowledge",
   authenticate,
   requirePermission("clinical:write"),
-  (req, res) => {
+  async (req, res) => {
     const params = z
       .object({ patientId: z.string().uuid(), alertId: z.string().min(1) })
       .safeParse(req.params);
@@ -259,7 +259,7 @@ router.post(
       return res.status(400).json({ error: "Invalid alert reference.", code: "INVALID_ALERT_REF" });
     }
     try {
-      const alert = service.acknowledgeAlert(actorFromUser(req.user!), req, {
+      const alert = await service.acknowledgeAlert(actorFromUser(req.user!), req, {
         patientId: params.data.patientId,
         alertId: params.data.alertId,
       });
@@ -296,11 +296,11 @@ router.get(
   "/workstation/patients/:patientId/journey",
   authenticate,
   requirePermission("patient:read"),
-  (req, res) => {
+  async (req, res) => {
     const parsed = patientIdParam.safeParse(req.params);
     if (!parsed.success) return res.status(400).json({ error: "Invalid patient identifier.", code: "INVALID_PATIENT_ID" });
     try {
-      const patient = service.getPatient(actorFromUser(req.user!), parsed.data.patientId);
+      const patient = await service.getPatient(actorFromUser(req.user!), parsed.data.patientId);
       auditEvent(req, res, "workstation.journey.read", "patient", parsed.data.patientId);
       return res.json({
         patientId: patient.id,

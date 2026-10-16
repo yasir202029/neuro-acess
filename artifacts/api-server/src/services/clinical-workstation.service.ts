@@ -100,24 +100,85 @@ const SYNTHETIC_PATIENTS: WorkstationPatient[] = [
 ];
 
 export class ClinicalWorkstationService {
-  getPatient(actor: WorkstationActor | undefined, patientId: string): WorkstationPatient {
+  /**
+   * PostgreSQL-first patient reads via the authoritative Drizzle store.
+   * The synthetic seed is used only as an explicit development fallback when
+   * the database holds no patients (or no DB is configured) — never in
+   * production, and the response records which source served the request.
+   */
+  private async loadPatients(): Promise<{
+    patients: WorkstationPatient[];
+    source: "database" | "synthetic-dev";
+  }> {
+    if (process.env.DATABASE_URL) {
+      const { drizzleStore } = await import("../slice/drizzle-store");
+      const { patientsTable, profilesTable, referralsTable } = await import("@workspace/db");
+      const { eq } = await import("drizzle-orm");
+      const rows = await drizzleStore["database"]
+        .select({
+          id: patientsTable.id,
+          displayName: profilesTable.displayName,
+          fullName: profilesTable.fullName,
+        })
+        .from(patientsTable)
+        .innerJoin(profilesTable, eq(profilesTable.id, patientsTable.profileId))
+        .limit(200);
+      if (rows.length > 0) {
+        return {
+          source: "database",
+          patients: rows.map((row) => this.toWorkstationPatient(row.id, row.displayName ?? row.fullName ?? "Unknown")),
+        };
+      }
+    }
+    if (process.env.NODE_ENV === "production") {
+      // Deny-by-default: never serve synthetic clinical data in production.
+      return { source: "database", patients: [] };
+    }
+    return { source: "synthetic-dev", patients: SYNTHETIC_PATIENTS };
+  }
+
+  /** Minimal authoritative projection for DB-sourced patients. Unknown
+   *  clinical fields are null until their domains are migrated — the UI
+   *  renders "—" rather than inventing values. */
+  private toWorkstationPatient(id: string, displayName: string): WorkstationPatient {
+    return {
+      id,
+      nhsNumber: "—",
+      displayName,
+      dateOfBirth: "—",
+      gender: "—",
+      pathway: "ADHD",
+      riskSeverity: "NONE",
+      riskScore: 0,
+      assignedClinicianId: null as unknown as string,
+      lastContactedAt: null as unknown as string,
+      nextAppointmentAt: null as unknown as string,
+      activeMedications: [],
+      openAlerts: [],
+      carePlanVersion: 1,
+    };
+  }
+
+  async getPatient(actor: WorkstationActor | undefined, patientId: string): Promise<WorkstationPatient> {
     requireCapability(actor, WorkstationCapability.READ_PATIENT);
     if (!isUuid(patientId)) {
       throw new WorkstationError(400, "INVALID_PATIENT_ID", "Invalid patient identifier.");
     }
-    const patient = SYNTHETIC_PATIENTS.find((p) => p.id === patientId);
+    const { patients } = await this.loadPatients();
+    const patient = patients.find((p) => p.id === patientId);
     if (!patient) {
       throw new WorkstationError(404, "PATIENT_NOT_FOUND", "Patient not found.");
     }
     return patient;
   }
 
-  listPatients(
+  async listPatients(
     actor: WorkstationActor | undefined,
     { page = 1, pageSize = 20, search }: { page?: number; pageSize?: number; search?: string },
-  ): Paginated<WorkstationPatient> {
+  ): Promise<Paginated<WorkstationPatient>> {
     requireCapability(actor, WorkstationCapability.READ_PATIENT);
-    let items = SYNTHETIC_PATIENTS;
+    const { patients } = await this.loadPatients();
+    let items = patients;
     if (search) {
       const q = search.toLowerCase();
       items = items.filter((p) => p.displayName.toLowerCase().includes(q) || p.nhsNumber.includes(q));
@@ -307,16 +368,17 @@ export class ClinicalWorkstationService {
     return note;
   }
 
-  acknowledgeAlert(
+  async acknowledgeAlert(
     actor: WorkstationActor | undefined,
     req: Request,
     { patientId, alertId }: { patientId: string; alertId: string },
-  ): ClinicalAlert {
+  ): Promise<ClinicalAlert> {
     requireCapability(actor, WorkstationCapability.WRITE_CLINICAL);
     if (!isUuid(patientId)) {
       throw new WorkstationError(400, "INVALID_PATIENT_ID", "Invalid patient identifier.");
     }
-    const patient = SYNTHETIC_PATIENTS.find((p) => p.id === patientId);
+    const { patients } = await this.loadPatients();
+    const patient = patients.find((p) => p.id === patientId);
     if (!patient) {
       throw new WorkstationError(404, "PATIENT_NOT_FOUND", "Patient not found.");
     }
