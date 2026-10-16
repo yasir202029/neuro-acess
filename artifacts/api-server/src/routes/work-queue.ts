@@ -5,17 +5,24 @@ import { auditEvent } from "../security/audit";
 import { WorkQueueService } from "../services/work-queue.service";
 import { WorkQueueActor, WorkQueueError, WorkQueueFilterView, type WorkQueueActionRequest } from "../types/work-queue";
 import type { Capability } from "@neurocare/permissions";
+import { hasPermission, permissions as allPermissions, type Permission } from "../security/roles";
 
 const router: IRouter = Router();
 const service = new WorkQueueService();
 
 function actorFromUser(user: AuthenticatedUser): WorkQueueActor {
+  // Derive the capability set server-side from the platform role grants —
+  // never trust a client-supplied capability list.
+  const role = user.role as Parameters<typeof hasPermission>[0];
+  const capabilities = new Set<string>(
+    allPermissions.filter((p) => hasPermission(role, p as Permission)),
+  ) as unknown as ReadonlySet<Capability>;
   return {
     actorId: user.id,
     email: user.email,
     roles: [user.role] as unknown as string[],
     clinicId: user.clinicId ?? null,
-    capabilities: new Set<string>() as unknown as ReadonlySet<Capability>,
+    capabilities,
   };
 }
 

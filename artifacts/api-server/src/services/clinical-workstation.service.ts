@@ -137,10 +137,85 @@ export class ClinicalWorkstationService {
     return { source: "synthetic-dev", patients: SYNTHETIC_PATIENTS };
   }
 
+  /**
+   * Journey state read from the authoritative journey_states table (via the
+   * Drizzle store). Derives per-stage statuses from the persisted stage —
+   * stages before the current one are COMPLETED, the current stage is ACTIVE,
+   * the next is WAITING (clinical review gate), and everything after is BLOCKED.
+   * Falls back to a safe referral-stage projection when no journey row exists.
+   */
+  async getJourney(patientId: string, pathway: string): Promise<{
+    currentStage: string;
+    stages: ReadonlyArray<{ stage: string; status: "COMPLETED" | "ACTIVE" | "WAITING" | "BLOCKED" }>;
+    nextStage: string;
+    safetyGates: readonly string[];
+  }> {
+    const STAGES = [
+      "REFERRAL",
+      "INTAKE",
+      "QUESTIONNAIRES",
+      "ASSESSMENT",
+      "CLINICAL_REVIEW",
+      "OUTCOME",
+      "REPORT",
+      "FEEDBACK",
+      "TREATMENT",
+      "TITRATION",
+      "MAINTENANCE_SHARED_CARE",
+      "ONGOING_CARE_DISCHARGE",
+    ] as const;
+
+    let currentStage = "REFERRAL";
+    let hasAssignedClinician = false;
+    let hasIntakeCompleted = false;
+    if (process.env.DATABASE_URL) {
+      const { drizzleStore } = await import("../slice/drizzle-store");
+      const { journeyStatesTable } = await import("@workspace/db");
+      const { eq } = await import("drizzle-orm");
+      const [row] = await drizzleStore["database"]
+        .select()
+        .from(journeyStatesTable)
+        .where(eq(journeyStatesTable.patientId, patientId))
+        .limit(1);
+      if (row) {
+        currentStage = row.stage;
+        hasAssignedClinician = row.hasAssignedClinician;
+        hasIntakeCompleted = row.hasIntakeCompleted;
+      }
+    }
+
+    const idx = STAGES.indexOf(currentStage as (typeof STAGES)[number]);
+    const safeIdx = idx === -1 ? 0 : idx;
+    const stages = STAGES.map((stage, i) => ({
+      stage,
+      status:
+        i < safeIdx
+          ? ("COMPLETED" as const)
+          : i === safeIdx
+            ? ("ACTIVE" as const)
+            : i === safeIdx + 1
+              ? ("WAITING" as const)
+              : ("BLOCKED" as const),
+    }));
+
+    // Clinical safety gate: stage may not cross CLINICAL_REVIEW without an
+    // assigned clinician and completed intake.
+    const safetyGates: string[] = [];
+    if (safeIdx >= STAGES.indexOf("CLINICAL_REVIEW") && (!hasAssignedClinician || !hasIntakeCompleted)) {
+      safetyGates.push("clinical_review_required");
+      const reviewIdx = stages.findIndex((s) => s.stage === "CLINICAL_REVIEW");
+      if (reviewIdx >= 0 && stages[reviewIdx].status === "ACTIVE") {
+        stages[reviewIdx].status = "WAITING";
+      }
+    }
+
+    const nextStage = stages[safeIdx + 1]?.stage ?? STAGES[STAGES.length - 1];
+    return { currentStage, stages, nextStage, safetyGates };
+  }
+
   /** Minimal authoritative projection for DB-sourced patients. Unknown
    *  clinical fields are null until their domains are migrated — the UI
-   *  renders "—" rather than inventing values. */
-  private toWorkstationPatient(id: string, displayName: string): WorkstationPatient {
+   *  renders "—" rather than inventing values. */  private toWorkstationPatient(id: string, displayName: string): WorkstationPatient {
     return {
       id,
       nhsNumber: "—",
@@ -188,11 +263,11 @@ export class ClinicalWorkstationService {
     return { items: pageItems, total: items.length, page, pageSize };
   }
 
-  createClinicalNote(
+  async createClinicalNote(
     actor: WorkstationActor | undefined,
     req: Request,
     input: { patientId: string; type: ClinicalNote["type"]; body: string },
-  ): ClinicalNote {
+  ): Promise<ClinicalNote> {
     requireCapability(actor, WorkstationCapability.WRITE_CLINICAL);
     if (!isUuid(input.patientId)) {
       throw new WorkstationError(400, "INVALID_PATIENT_ID", "Invalid patient identifier.");
@@ -200,7 +275,8 @@ export class ClinicalWorkstationService {
     if (!input.body || input.body.length < 5 || input.body.length > 50_000) {
       throw new WorkstationError(400, "INVALID_NOTE_BODY", "Clinical note body must be between 5 and 50,000 characters.");
     }
-    const now = new Date().toISOString();
+    const now = new Date();
+    const nowIso = now.toISOString();
     const note: ClinicalNote = {
       id: randomUUID(),
       patientId: input.patientId,
@@ -210,9 +286,23 @@ export class ClinicalWorkstationService {
       body: input.body,
       version: 1,
       signedAt: null,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
+    if (process.env.DATABASE_URL) {
+      const { drizzleStore } = await import("../slice/drizzle-store");
+      const { clinicalNotesTable } = await import("@workspace/db");
+      await drizzleStore["database"].insert(clinicalNotesTable).values({
+        id: note.id,
+        patientId: note.patientId,
+        authorProfileId: note.authorId,
+        noteType: note.type,
+        body: note.body,
+        occurredAt: now,
+        version: 1,
+        signedAt: null,
+      });
+    }
     auditEvent(req, resPlaceholder(req), "ehr.clinical_note.create", "patient", input.patientId, {
       noteId: note.id,
       type: note.type,
@@ -400,11 +490,37 @@ export class ClinicalWorkstationService {
     return acknowledged;
   }
 
-  listVitals(actor: WorkstationActor | undefined, patientId: string): readonly VitalsObservation[] {
+  async listVitals(actor: WorkstationActor | undefined, patientId: string): Promise<readonly VitalsObservation[]> {
     requireCapability(actor, WorkstationCapability.READ_PATIENT);
     if (!isUuid(patientId)) {
       throw new WorkstationError(400, "INVALID_PATIENT_ID", "Invalid patient identifier.");
     }
+    if (process.env.DATABASE_URL) {
+      const { drizzleStore } = await import("../slice/drizzle-store");
+      const { patientVitalsTable } = await import("@workspace/db");
+      const { eq, desc } = await import("drizzle-orm");
+      const rows = await drizzleStore["database"]
+        .select()
+        .from(patientVitalsTable)
+        .where(eq(patientVitalsTable.patientId, patientId))
+        .orderBy(desc(patientVitalsTable.recordedAt))
+        .limit(50);
+      return rows.map((row) => ({
+        id: row.id,
+        patientId: row.patientId,
+        recordedAt: row.recordedAt.toISOString(),
+        systolicBp: row.systolicBp ?? undefined,
+        diastolicBp: row.diastolicBp ?? undefined,
+        heartRate: row.heartRate ?? undefined,
+        temperature: row.temperature ?? undefined,
+        weightKg: row.weightKg ? Number(row.weightKg) : undefined,
+        heightCm: row.heightCm ? Number(row.heightCm) : undefined,
+        oxygenSaturation: row.oxygenSaturation ?? undefined,
+        recordedBy: row.recordedBy,
+      }));
+    }
+    // Development fallback: clearly-marked synthetic series when no DB configured.
+    if (process.env.NODE_ENV === "production") return [];
     const base = new Date("2026-10-01T00:00:00Z");
     return Array.from({ length: 10 }, (_, i) => {
       const recordedAt = new Date(base.getTime() + i * 86_400_000).toISOString();
