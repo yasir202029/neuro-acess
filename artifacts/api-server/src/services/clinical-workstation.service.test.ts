@@ -50,8 +50,8 @@ describe("ClinicalWorkstationService", () => {
     await expect(svc.listPatients(noRead, {})).rejects.toThrow(/Capability required/);
   });
 
-  it("createClinicalNote creates a DRAFT note", () => {
-    const note = svc.createClinicalNote(actor, req, {
+  it("createClinicalNote creates a DRAFT note", async () => {
+    const note = await svc.createClinicalNote(actor, req, {
       patientId: PATIENT_ID,
       type: "CONSULTATION",
       body: "Patient presents with inattentive symptoms.",
@@ -59,9 +59,9 @@ describe("ClinicalWorkstationService", () => {
     expect(note.status).toBe("DRAFT");
     expect(note.version).toBe(1);
     expect(note.authorId).toBe("clinician-01");
-    expect(() =>
+    await expect(
       svc.createClinicalNote(actor, req, { patientId: "bad", type: "CONSULTATION", body: "x" }),
-    ).toThrow(/Invalid patient identifier/);
+    ).rejects.toThrow(/Invalid patient identifier/);
   });
 
   it("submitAssessment validates answers and computes score", () => {
@@ -149,8 +149,8 @@ describe("ClinicalWorkstationService", () => {
     ).rejects.toThrow(/Patient not found/);
   });
 
-  it("listVitals returns a time series", () => {
-    const vitals = svc.listVitals(actor, PATIENT_ID);
+  it("listVitals returns a time series", async () => {
+    const vitals = await svc.listVitals(actor, PATIENT_ID);
     expect(vitals.length).toBe(10);
     expect(vitals[0].systolicBp).toBeGreaterThan(0);
   });

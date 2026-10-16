@@ -2,19 +2,40 @@ import { Router, type IRouter } from "express";
 import { z } from "zod";
 import { authenticate, requirePermission, type AuthenticatedUser } from "../security/auth";
 import { auditEvent } from "../security/audit";
+import { hasPermission, permissions as allPermissions, type Permission } from "../security/roles";
 import { ClinicalWorkstationService } from "../services/clinical-workstation.service";
 import { WorkstationCapability, type WorkstationActor } from "../types/clinical-workstation";
+import { WorkQueueService } from "../services/work-queue.service";
+import type { WorkQueueActor } from "../types/work-queue";
 
 const router: IRouter = Router();
 const service = new ClinicalWorkstationService();
+const serviceQueue = new WorkQueueService();
+
+function queueActorFromUser(user: AuthenticatedUser): WorkQueueActor {
+  const a = actorFromUser(user);
+  return {
+    actorId: a.actorId,
+    email: a.email,
+    roles: [...a.roles],
+    clinicId: a.clinicId,
+    capabilities: a.capabilities as unknown as ReadonlySet<import("@neurocare/permissions").Capability>,
+  };
+}
 
 function actorFromUser(user: AuthenticatedUser): WorkstationActor {
+  // Derive the capability set server-side from the platform role grants —
+  // never trust a client-supplied capability list.
+  const role = user.role as Parameters<typeof hasPermission>[0];
+  const capabilities = new Set<string>(
+    allPermissions.filter((p) => hasPermission(role, p as Permission)),
+  ) as unknown as ReadonlySet<WorkstationCapability>;
   return {
     actorId: user.id,
     email: user.email,
     roles: [user.role],
     clinicId: user.clinicId ?? null,
-    capabilities: new Set<string>() as unknown as ReadonlySet<WorkstationCapability>,
+    capabilities,
   };
 }
 
@@ -113,14 +134,14 @@ router.post(
   "/workstation/patients/:patientId/clinical-notes",
   authenticate,
   requirePermission("clinical:write"),
-  (req, res) => {
+  async (req, res) => {
     const params = patientIdParam.safeParse(req.params);
     const body = noteBody.safeParse(req.body);
     if (!params.success || !body.success) {
       return res.status(400).json({ error: "Invalid clinical note payload.", code: "INVALID_CLINICAL_NOTE" });
     }
     try {
-      const note = service.createClinicalNote(actorFromUser(req.user!), req, {
+      const note = await service.createClinicalNote(actorFromUser(req.user!), req, {
         patientId: params.data.patientId,
         type: body.data.type,
         body: body.data.body,
@@ -278,11 +299,11 @@ router.get(
   "/workstation/patients/:patientId/vitals",
   authenticate,
   requirePermission("patient:read"),
-  (req, res) => {
+  async (req, res) => {
     const parsed = patientIdParam.safeParse(req.params);
     if (!parsed.success) return res.status(400).json({ error: "Invalid patient identifier.", code: "INVALID_PATIENT_ID" });
     try {
-      const vitals = service.listVitals(actorFromUser(req.user!), parsed.data.patientId);
+      const vitals = await service.listVitals(actorFromUser(req.user!), parsed.data.patientId);
       auditEvent(req, res, "workstation.vitals.list", "patient", parsed.data.patientId);
       return res.json(vitals);
     } catch (error) {
@@ -301,27 +322,12 @@ router.get(
     if (!parsed.success) return res.status(400).json({ error: "Invalid patient identifier.", code: "INVALID_PATIENT_ID" });
     try {
       const patient = await service.getPatient(actorFromUser(req.user!), parsed.data.patientId);
+      const journey = await service.getJourney(parsed.data.patientId, patient.pathway);
       auditEvent(req, res, "workstation.journey.read", "patient", parsed.data.patientId);
       return res.json({
         patientId: patient.id,
         pathway: patient.pathway,
-        currentStage: "CLINICAL_REVIEW",
-        stages: [
-          { stage: "REFERRAL", status: "COMPLETED" as const },
-          { stage: "INTAKE", status: "COMPLETED" as const },
-          { stage: "QUESTIONNAIRES", status: "COMPLETED" as const },
-          { stage: "ASSESSMENT", status: "ACTIVE" as const },
-          { stage: "CLINICAL_REVIEW", status: "WAITING" as const },
-          { stage: "OUTCOME", status: "BLOCKED" as const },
-          { stage: "REPORT", status: "BLOCKED" as const },
-          { stage: "FEEDBACK", status: "BLOCKED" as const },
-          { stage: "TREATMENT", status: "BLOCKED" as const },
-          { stage: "TITRATION", status: "BLOCKED" as const },
-          { stage: "MAINTENANCE_SHARED_CARE", status: "BLOCKED" as const },
-          { stage: "ONGOING_CARE_DISCHARGE", status: "BLOCKED" as const },
-        ],
-        nextStage: "CLINICAL_REVIEW",
-        safetyGates: ["clinical_review_required"],
+        ...journey,
       });
     } catch (error) {
       return handleServiceError(res, error);
@@ -329,22 +335,25 @@ router.get(
   },
 );
 
-// ── Work queue ──
+// ── Work queue (live bucket counts from the queue service — never hard-coded) ──
 router.get(
   "/workstation/queue",
   authenticate,
   requirePermission("patient:read"),
-  (req, res) => {
+  async (req, res) => {
     try {
+      const buckets = serviceQueue.listQueueBuckets(queueActorFromUser(req.user!));
       auditEvent(req, res, "workstation.queue.read", "workstation");
+      const byId = Object.fromEntries(buckets.map((b) => [b.id, b.count]));
       return res.json({
-        newReferrals: 3,
-        waitingForForms: 1,
-        appointmentRequired: 2,
-        clinicianAssignmentRequired: 1,
-        reportPending: 0,
-        followUpRequired: 4,
-        adminActionRequired: 0,
+        newReferrals: byId["new-referrals"] ?? 0,
+        waitingForForms: byId["waiting-for-forms"] ?? 0,
+        appointmentRequired: byId["appointment-required"] ?? 0,
+        clinicianAssignmentRequired: byId["clinician-assignment-required"] ?? 0,
+        reportPending: byId["report-pending"] ?? 0,
+        followUpRequired: byId["follow-up-required"] ?? 0,
+        adminActionRequired: byId["administrative-exception"] ?? 0,
+        buckets,
       });
     } catch (error) {
       return handleServiceError(res, error);
