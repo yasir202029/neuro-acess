@@ -7,7 +7,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { workstationApi, type WorkstationPatient, type Paginated } from "@/lib/clinical-api";
+import { workstationApi, type WorkstationPatient, type Paginated, type WorkQueueFilterView, type WorkQueueStatus, type WorkQueueTaskType, type WorkQueuePriority } from "@/lib/clinical-api";
 
 export const workstationKeys = {
   patients: (search?: string) => ["workstation", "patients", search ?? ""],
@@ -130,3 +130,60 @@ export function useAcknowledgeAlert(patientId: string) {
 }
 
 export type { WorkstationPatient, Paginated };
+
+// ── Work queue (live bucket counts + items — never hard-coded) ──────────────
+
+export const queueKeys = {
+  summary: () => ["workstation", "queue", "summary"],
+  items: (params?: Record<string, unknown>) => ["workstation", "queue", "items", params ?? {}],
+};
+
+/** Live work queue bucket counts. */
+export function useWorkQueueSummary() {
+  return useQuery({
+    queryKey: queueKeys.summary(),
+    queryFn: () => workstationApi.getQueueSummary(),
+    staleTime: 1000 * 30,
+    refetchInterval: 1000 * 60,
+  });
+}
+
+/** Live work queue items (paginated, filterable). */
+export function useWorkQueueItems(params?: {
+  bucketId?: string;
+  filterView?: WorkQueueFilterView;
+  search?: string;
+  status?: WorkQueueStatus;
+  taskType?: WorkQueueTaskType;
+  owner?: string;
+  priority?: WorkQueuePriority;
+  page?: number;
+  pageSize?: number;
+}) {
+  return useQuery({
+    queryKey: queueKeys.items(params),
+    queryFn: () => workstationApi.getQueueItems(params),
+    staleTime: 1000 * 30,
+    refetchInterval: 1000 * 60,
+  });
+}
+
+/** Perform a work queue action, then refresh buckets + items. */
+export function usePerformQueueAction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      itemId,
+      actionId,
+      payload,
+    }: {
+      itemId: string;
+      actionId: string;
+      payload?: Record<string, unknown>;
+    }) => workstationApi.performQueueAction(itemId, actionId, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["workstation", "queue"] });
+      qc.invalidateQueries({ queryKey: workstationKeys.patients() });
+    },
+  });
+}
